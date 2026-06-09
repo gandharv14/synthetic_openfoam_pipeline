@@ -1,0 +1,64 @@
+[
+  {
+    "id": "hidden_crosswind_payload_split",
+    "duration": 6.4,
+    "base": [0.04, 0.14, 0.11, 0.05, 0.20, 0.06, 0.01],
+    "amplitude": [0.20, 0.17, 0.15, 0.11, 0.13, 0.18, 0.12],
+    "frequency": 0.155,
+    "phase": [0.25, 1.05, 1.75, 2.45, 0.55, 1.35, 2.15],
+    "stiffness_scale": 0.92,
+    "damping_scale": 1.22,
+    "left_payload_scale": 1.28,
+    "right_payload_scale": 0.86,
+    "actuator_gains": [0.90, 0.78, 0.84, 0.73, 0.88, 0.82, 0.74],
+    "dropouts": [
+      {"start": 1.55, "duration": 0.16, "joint": 2, "gain": 0.25},
+      {"start": 3.75, "duration": 0.14, "joint": 5, "gain": 0.30}
+    ],
+    "gusts": [
+      {"time": 2.10, "duration": 0.08, "joint": 0, "impulse": 0.024},
+      {"time": 4.30, "duration": 0.07, "joint": 4, "impulse": -0.018}
+    ]
+  },
+  {
+    "id": "hidden_tip_recovery_sweep",
+    "duration": 6.8,
+    "base": [-0.03, 0.20, 0.05, -0.01, 0.13, 0.17, 0.07],
+    "amplitude": [0.17, 0.13, 0.18, 0.13, 0.18, 0.12, 0.10],
+    "frequency": 0.185,
+    "phase": [0.70, 1.45, 2.10, 2.80, 0.05, 0.95, 1.90],
+    "stiffness_scale": 1.32,
+    "damping_scale": 0.96,
+    "left_payload_scale": 0.92,
+    "right_payload_scale": 1.24,
+    "actuator_gains": [0.95, 0.84, 0.80, 0.72, 0.91, 0.76, 0.70],
+    "dropouts": [
+      {"start": 2.20, "duration": 0.18, "joint": 3, "gain": 0.20},
+      {"start": 4.95, "duration": 0.12, "joint": 6, "gain": 0.35}
+    ],
+    "gusts": [
+      {"time": 1.25, "duration": 0.06, "joint": 1, "impulse": -0.018},
+      {"time": 3.60, "duration": 0.08, "joint": 6, "impulse": 0.022}
+    ]
+  },
+  {
+    "id": "hidden_low_gain_roll_hold",
+    "duration": 6.2,
+    "base": [0.08, 0.09, 0.17, 0.09, 0.19, 0.09, 0.03],
+    "amplitude": [0.13, 0.19, 0.12, 0.09, 0.15, 0.17, 0.12],
+    "frequency": 0.130,
+    "phase": [1.05, 0.40, 1.30, 2.25, 0.80, 1.70, 2.60],
+    "stiffness_scale": 1.18,
+    "damping_scale": 1.30,
+    "left_payload_scale": 1.12,
+    "right_payload_scale": 1.10,
+    "actuator_gains": [0.82, 0.74, 0.78, 0.68, 0.80, 0.76, 0.66],
+    "dropouts": [
+      {"start": 1.90, "duration": 0.14, "joint": 1, "gain": 0.30},
+      {"start": 4.35, "duration": 0.16, "joint": 4, "gain": 0.28}
+    ],
+    "gusts": [
+      {"time": 2.85, "duration": 0.07, "joint": 0, "impulse": -0.020}
+    ]
+  }
+]

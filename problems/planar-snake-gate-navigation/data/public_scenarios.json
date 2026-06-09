@@ -1,0 +1,42 @@
+[
+  {
+    "id": "public_shallow_slalom",
+    "family": "shallow_slalom",
+    "initial_pose": [-0.86, -0.08, 0.05],
+    "target": [0.78, 0.12],
+    "gates": [
+      {"center": [-0.46, 0.08], "yaw": 0.18, "width": 0.34, "depth": 0.18},
+      {"center": [-0.04, -0.10], "yaw": -0.22, "width": 0.34, "depth": 0.18},
+      {"center": [0.39, 0.08], "yaw": 0.18, "width": 0.32, "depth": 0.18},
+      {"center": [0.78, 0.12], "yaw": 0.04, "width": 0.32, "depth": 0.18}
+    ],
+    "no_go": [
+      {"type": "circle", "center": [-0.20, 0.28], "radius": 0.06},
+      {"type": "circle", "center": [0.22, -0.30], "radius": 0.06}
+    ],
+    "duration": 8.0,
+    "body_friction": 0.88,
+    "drive_scale": 0.46,
+    "turn_scale": 0.64
+  },
+  {
+    "id": "public_offset_corridor",
+    "family": "offset_corridor",
+    "initial_pose": [-0.88, 0.18, -0.08],
+    "target": [0.80, -0.22],
+    "gates": [
+      {"center": [-0.50, 0.18], "yaw": -0.06, "width": 0.30, "depth": 0.17},
+      {"center": [-0.09, 0.04], "yaw": -0.26, "width": 0.30, "depth": 0.17},
+      {"center": [0.34, -0.13], "yaw": -0.20, "width": 0.30, "depth": 0.17},
+      {"center": [0.80, -0.22], "yaw": -0.02, "width": 0.30, "depth": 0.17}
+    ],
+    "no_go": [
+      {"type": "circle", "center": [-0.31, -0.10], "radius": 0.06},
+      {"type": "circle", "center": [0.15, 0.23], "radius": 0.07}
+    ],
+    "duration": 8.0,
+    "body_friction": 0.82,
+    "drive_scale": 0.44,
+    "turn_scale": 0.66
+  }
+]

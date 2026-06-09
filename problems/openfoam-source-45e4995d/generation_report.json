@@ -1,0 +1,101 @@
+{
+  "expected_metrics": {
+    "mass_balance_max": 0.002,
+    "postprocessing_required": [
+      "fieldAverage"
+    ],
+    "pressure_drop_max": 5.0,
+    "pressure_drop_min": 0.05,
+    "residual_max": 0.0001,
+    "source_target": 0.2,
+    "tolerance": 0.05
+  },
+  "family": "source_term_calibration",
+  "forbidden_edits": [
+    {
+      "description": "Must preserve physical input",
+      "path": "constant/transportProperties",
+      "sha256": "9be7e9acaa702482805a26b1332a3b4cffaf8aec4c109cf98093b7a3bcba6b54"
+    },
+    {
+      "description": "Must preserve physical input",
+      "path": "system/blockMeshDict",
+      "sha256": "1f691afadecdb69fe81d9d6a5edad5c4fe3e2d110196a3d53247061ccff305da"
+    }
+  ],
+  "generation_report": {
+    "claude_hard_rationale": "Likely Claude-hard because direct metric spoofing is rejected and the correction must generalize to hidden source-strength and viscosity variants.",
+    "expected_metrics": {
+      "mass_balance_max": 0.002,
+      "postprocessing_required": [
+        "fieldAverage"
+      ],
+      "pressure_drop_max": 5.0,
+      "pressure_drop_min": 0.05,
+      "residual_max": 0.0001,
+      "source_target": 0.2,
+      "tolerance": 0.05
+    },
+    "family_title": "Source-term calibration",
+    "oracle_strategy": "Extract starter_case.tar.gz, apply the family-specific OpenFOAM dictionary repair, then package the corrected case as /tmp/output/fixed_case.tar.gz.",
+    "prompt_rewrite": {
+      "model": null,
+      "reason": "prompt rewriting disabled by config",
+      "status": "disabled"
+    },
+    "symptom": "The scalar/momentum source is present but calibrated to the wrong target response."
+  },
+  "hidden_variants": [
+    {
+      "changes": {
+        "source_strength": 0.24
+      },
+      "expected_overrides": {},
+      "name": "changed_source_strength"
+    },
+    {
+      "changes": {
+        "viscosity": 0.0125
+      },
+      "expected_overrides": {},
+      "name": "changed_viscosity"
+    }
+  ],
+  "output_contract": "/tmp/output/fixed_case.tar.gz",
+  "rationale": "Likely Claude-hard because direct metric spoofing is rejected and the correction must generalize to hidden source-strength and viscosity variants.",
+  "seed": 123,
+  "seed_case": {
+    "case_kind": "source_channel",
+    "compatible_families": [
+      "source_term_calibration"
+    ],
+    "parameters": {
+      "source_strength": 0.2,
+      "viscosity": 0.01
+    },
+    "runtime_estimate_sec": 35,
+    "seed_id": "heated-scalar-channel",
+    "solver": "simpleFoam"
+  },
+  "skill_graph": {
+    "family": "source_term_calibration",
+    "hidden_generalization_axes": [
+      "inlet velocity",
+      "viscosity",
+      "write interval",
+      "probe location",
+      "source strength",
+      "mesh grading"
+    ],
+    "requires_multi_file_consistency": true,
+    "skills": [
+      "fvOptions calibration",
+      "source-region validation",
+      "field metric tolerance"
+    ]
+  },
+  "status": "candidate",
+  "task_dir": "lbx-rl-tasks-iso-template/problems/openfoam-source-45e4995d",
+  "task_id": "openfoam-source-45e4995d",
+  "zip_path": null
+}

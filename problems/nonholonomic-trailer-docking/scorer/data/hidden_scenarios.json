@@ -1,0 +1,80 @@
+[
+  {
+    "id": "hidden_straight_reverse_long",
+    "family": "straight_reverse_dock",
+    "duration": 7.5,
+    "trailer_length": 0.9,
+    "initial_hitch": [1.02, 0.08],
+    "initial_tractor_yaw": 0.10,
+    "initial_trailer_yaw": 0.04,
+    "target_pose": [-0.62, -0.04, -0.03],
+    "reverse_required": true,
+    "no_go": []
+  },
+  {
+    "id": "hidden_angled_bay_left",
+    "family": "angled_bay",
+    "duration": 9.0,
+    "trailer_length": 0.92,
+    "initial_hitch": [0.78, -0.28],
+    "initial_tractor_yaw": 0.18,
+    "initial_trailer_yaw": 0.08,
+    "target_pose": [-0.58, 0.12, 0.22],
+    "reverse_required": true,
+    "no_go": []
+  },
+  {
+    "id": "hidden_angled_bay_right",
+    "family": "angled_bay",
+    "duration": 9.0,
+    "trailer_length": 0.86,
+    "initial_hitch": [0.82, 0.28],
+    "initial_tractor_yaw": -0.18,
+    "initial_trailer_yaw": -0.08,
+    "target_pose": [-0.58, -0.12, -0.22],
+    "reverse_required": true,
+    "no_go": []
+  },
+  {
+    "id": "hidden_obstacle_s_bend",
+    "family": "obstacle_s_bend",
+    "duration": 9.5,
+    "trailer_length": 0.9,
+    "initial_hitch": [0.92, -0.12],
+    "initial_tractor_yaw": 0.12,
+    "initial_trailer_yaw": 0.05,
+    "target_pose": [-0.60, 0.04, 0.08],
+    "reverse_required": true,
+    "no_go": [
+      {"type": "circle", "center": [0.35, -0.42], "radius": 0.10},
+      {"type": "circle", "center": [-0.18, 0.42], "radius": 0.10}
+    ]
+  },
+  {
+    "id": "hidden_jackknife_start",
+    "family": "jackknife_start",
+    "duration": 8.0,
+    "trailer_length": 0.95,
+    "initial_hitch": [0.68, 0.28],
+    "initial_tractor_yaw": -0.72,
+    "initial_trailer_yaw": 0.12,
+    "target_pose": [-0.50, -0.18, -0.23],
+    "reverse_required": true,
+    "no_go": []
+  },
+  {
+    "id": "hidden_disturbed_final_hold",
+    "family": "disturbed_final_hold",
+    "duration": 9.0,
+    "trailer_length": 0.9,
+    "initial_hitch": [0.86, 0.12],
+    "initial_tractor_yaw": 0.08,
+    "initial_trailer_yaw": -0.02,
+    "target_pose": [-0.52, 0.10, 0.05],
+    "reverse_required": true,
+    "disturbance": {"time": 6.25, "trailer_yaw_rate": 0.22, "hitch_velocity": [0.05, -0.04]},
+    "no_go": [
+      {"type": "circle", "center": [0.14, 0.42], "radius": 0.13}
+    ]
+  }
+]

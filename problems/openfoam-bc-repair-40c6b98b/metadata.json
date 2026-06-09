@@ -1,0 +1,7 @@
+{
+  "benchmark": "taiga_task",
+  "problem_data": {
+    "description": "The channel case runs unreliably and violates pressure/flux consistency at hidden operating points.",
+    "instance_id": "openfoam-bc-repair-40c6b98b"
+  }
+}

@@ -1,0 +1,33 @@
+[
+  {
+    "id": "public_shelf_break",
+    "duration": 10.5,
+    "start": [0.02, 0.72],
+    "finish": [1.98, 0.86],
+    "workspace": {"x_min": -0.10, "x_max": 2.12, "z_min": 0.20, "z_max": 1.38},
+    "thermocline": {
+      "base": 0.71,
+      "slope": 0.060,
+      "waves": [
+        {"amp": 0.105, "freq": 3.30, "phase": 0.30},
+        {"amp": -0.050, "freq": 6.20, "phase": 1.15}
+      ]
+    },
+    "samples": [
+      {"x": 0.42, "radius_x": 0.060, "radius_z": 0.065},
+      {"x": 0.78, "radius_x": 0.055, "radius_z": 0.060},
+      {"x": 1.18, "radius_x": 0.055, "radius_z": 0.060},
+      {"x": 1.58, "radius_x": 0.060, "radius_z": 0.065}
+    ],
+    "plumes": [
+      {"center": [0.62, 1.06], "radius": 0.120},
+      {"center": [1.36, 0.58], "radius": 0.105}
+    ],
+    "base_current": [0.014, -0.010],
+    "shear": {"amplitude": 0.036, "frequency": 5.0, "phase": 0.20},
+    "eddies": [
+      {"center": [0.95, 0.78], "strength": 0.006},
+      {"center": [1.45, 0.92], "strength": -0.005}
+    ]
+  }
+]

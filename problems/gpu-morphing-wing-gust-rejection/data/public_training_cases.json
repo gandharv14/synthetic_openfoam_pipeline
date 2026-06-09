@@ -1,0 +1,28 @@
+[
+  {
+    "id": "public_roll_sweep",
+    "duration": 6.0,
+    "base": [0.00, 0.16, 0.08, 0.03, 0.16, 0.08, 0.03],
+    "amplitude": [0.18, 0.16, 0.13, 0.09, 0.16, 0.13, 0.09],
+    "frequency": 0.17,
+    "phase": [0.0, 0.8, 1.5, 2.2, 0.9, 1.7, 2.4],
+    "stiffness_scale": 1.0,
+    "damping_scale": 1.0,
+    "left_payload_scale": 1.0,
+    "right_payload_scale": 1.0,
+    "actuator_gains": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+  },
+  {
+    "id": "public_asymmetric_fatigue",
+    "duration": 6.5,
+    "base": [0.06, 0.10, 0.18, 0.08, 0.22, 0.10, 0.02],
+    "amplitude": [0.14, 0.18, 0.14, 0.11, 0.12, 0.16, 0.10],
+    "frequency": 0.14,
+    "phase": [0.4, 1.1, 1.9, 2.7, 0.2, 1.4, 2.3],
+    "stiffness_scale": 1.25,
+    "damping_scale": 1.15,
+    "left_payload_scale": 1.20,
+    "right_payload_scale": 0.92,
+    "actuator_gains": [0.92, 0.78, 0.82, 0.72, 0.90, 0.86, 0.76]
+  }
+]

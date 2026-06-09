@@ -1,0 +1,17 @@
+[
+  {
+    "description": "Must preserve physical input",
+    "path": "constant/transportProperties",
+    "sha256": "9be7e9acaa702482805a26b1332a3b4cffaf8aec4c109cf98093b7a3bcba6b54"
+  },
+  {
+    "description": "Must preserve physical input",
+    "path": "0/U",
+    "sha256": "1504884bbf7c53c6e7be2a80b3a8b50fcf499d472ed9ec2314db145ed5ff9915"
+  },
+  {
+    "description": "Must preserve physical input",
+    "path": "0/p",
+    "sha256": "2928bf1a66b3bc7da2e7ed74cd157cb61c68513c0c1ed12e446490f49e1da628"
+  }
+]

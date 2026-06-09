@@ -1,0 +1,7 @@
+{
+  "benchmark": "taiga_task",
+  "problem_data": {
+    "instance_id": "gpu-morphing-wing-gust-rejection",
+    "description": "GPU-backed MuJoCo policy training task for a redundant articulated morphing wing under hidden gust, stiffness, and actuator-fault cases."
+  }
+}

@@ -1,0 +1,40 @@
+[
+  {
+    "id": "public_straight_reverse",
+    "family": "straight_reverse_dock",
+    "duration": 7.0,
+    "trailer_length": 0.9,
+    "initial_hitch": [0.95, 0.0],
+    "initial_tractor_yaw": 0.0,
+    "initial_trailer_yaw": 0.0,
+    "target_pose": [-0.55, 0.0, 0.0],
+    "reverse_required": true,
+    "no_go": []
+  },
+  {
+    "id": "public_angled_bay",
+    "family": "angled_bay",
+    "duration": 8.0,
+    "trailer_length": 0.9,
+    "initial_hitch": [0.75, -0.32],
+    "initial_tractor_yaw": 0.20,
+    "initial_trailer_yaw": 0.10,
+    "target_pose": [-0.35, 0.32, 0.42],
+    "reverse_required": true,
+    "no_go": [
+      {"type": "circle", "center": [0.10, 0.05], "radius": 0.18}
+    ]
+  },
+  {
+    "id": "public_jackknife_recovery",
+    "family": "jackknife_start",
+    "duration": 7.5,
+    "trailer_length": 0.95,
+    "initial_hitch": [0.70, 0.25],
+    "initial_tractor_yaw": -0.55,
+    "initial_trailer_yaw": 0.15,
+    "target_pose": [-0.45, -0.20, -0.20],
+    "reverse_required": true,
+    "no_go": []
+  }
+]

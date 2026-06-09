@@ -1,0 +1,30 @@
+[
+  {
+    "name": "nominal_stand",
+    "duration": 3.0,
+    "initial_qpos": [0.0, 0.0, 0.0, 0.08, -0.16, 0.08, 0.08, -0.16, 0.08],
+    "pushes": [],
+    "friction_scale": 1.0
+  },
+  {
+    "name": "left_push_recovery",
+    "duration": 3.5,
+    "initial_qpos": [0.0, 0.0, 0.04, 0.08, -0.16, 0.08, 0.08, -0.16, 0.08],
+    "pushes": [{"time": 0.7, "duration": 0.12, "force": 42.0}],
+    "friction_scale": 1.0
+  },
+  {
+    "name": "right_push_recovery",
+    "duration": 3.5,
+    "initial_qpos": [0.0, 0.0, -0.04, 0.08, -0.16, 0.08, 0.08, -0.16, 0.08],
+    "pushes": [{"time": 0.7, "duration": 0.12, "force": -42.0}],
+    "friction_scale": 1.0
+  },
+  {
+    "name": "low_friction_small_push",
+    "duration": 3.5,
+    "initial_qpos": [0.0, 0.0, 0.025, 0.08, -0.16, 0.08, 0.08, -0.16, 0.08],
+    "pushes": [{"time": 0.9, "duration": 0.10, "force": 30.0}],
+    "friction_scale": 0.72
+  }
+]

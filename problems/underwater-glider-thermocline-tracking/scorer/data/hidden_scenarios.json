@@ -1,0 +1,164 @@
+[
+  {
+    "id": "hidden_coastal_front",
+    "duration": 10.8,
+    "start": [0.00, 0.64],
+    "finish": [2.02, 0.92],
+    "workspace": {"x_min": -0.10, "x_max": 2.14, "z_min": 0.20, "z_max": 1.40},
+    "thermocline": {
+      "base": 0.66,
+      "slope": 0.080,
+      "waves": [
+        {"amp": 0.115, "freq": 3.10, "phase": 0.62},
+        {"amp": -0.040, "freq": 7.00, "phase": 1.50}
+      ]
+    },
+    "samples": [
+      {"x": 0.38, "radius_x": 0.055, "radius_z": 0.060},
+      {"x": 0.76, "radius_x": 0.052, "radius_z": 0.058},
+      {"x": 1.16, "radius_x": 0.052, "radius_z": 0.058},
+      {"x": 1.54, "radius_x": 0.055, "radius_z": 0.060}
+    ],
+    "plumes": [
+      {"center": [0.55, 0.98], "radius": 0.110},
+      {"center": [1.28, 0.58], "radius": 0.115},
+      {"center": [1.70, 1.05], "radius": 0.100}
+    ],
+    "base_current": [0.018, -0.014],
+    "shear": {"amplitude": 0.040, "frequency": 5.40, "phase": 0.10},
+    "eddies": [
+      {"center": [0.86, 0.73], "strength": 0.007},
+      {"center": [1.48, 0.90], "strength": -0.006}
+    ]
+  },
+  {
+    "id": "hidden_canyon_return",
+    "duration": 11.0,
+    "start": [0.01, 0.91],
+    "finish": [2.00, 0.70],
+    "workspace": {"x_min": -0.10, "x_max": 2.14, "z_min": 0.20, "z_max": 1.42},
+    "thermocline": {
+      "base": 0.88,
+      "slope": -0.040,
+      "waves": [
+        {"amp": -0.130, "freq": 2.90, "phase": 0.20},
+        {"amp": 0.055, "freq": 6.40, "phase": 2.05}
+      ]
+    },
+    "samples": [
+      {"x": 0.40, "radius_x": 0.056, "radius_z": 0.062},
+      {"x": 0.82, "radius_x": 0.052, "radius_z": 0.058},
+      {"x": 1.22, "radius_x": 0.052, "radius_z": 0.058},
+      {"x": 1.62, "radius_x": 0.056, "radius_z": 0.062}
+    ],
+    "plumes": [
+      {"center": [0.68, 0.48], "radius": 0.110},
+      {"center": [1.18, 1.08], "radius": 0.120},
+      {"center": [1.62, 0.54], "radius": 0.095}
+    ],
+    "base_current": [0.010, 0.012],
+    "shear": {"amplitude": 0.044, "frequency": 4.75, "phase": 0.85},
+    "eddies": [
+      {"center": [0.74, 0.82], "strength": -0.006},
+      {"center": [1.38, 0.72], "strength": 0.007}
+    ]
+  },
+  {
+    "id": "hidden_internal_wave",
+    "duration": 9.2,
+    "start": [0.00, 0.76],
+    "finish": [2.01, 0.81],
+    "workspace": {"x_min": -0.10, "x_max": 2.14, "z_min": 0.20, "z_max": 1.40},
+    "thermocline": {
+      "base": 0.75,
+      "slope": 0.030,
+      "waves": [
+        {"amp": 0.145, "freq": 3.55, "phase": 1.10},
+        {"amp": -0.045, "freq": 8.10, "phase": 0.55}
+      ]
+    },
+    "samples": [
+      {"x": 0.36, "radius_x": 0.054, "radius_z": 0.082},
+      {"x": 0.74, "radius_x": 0.052, "radius_z": 0.088},
+      {"x": 1.14, "radius_x": 0.052, "radius_z": 0.086},
+      {"x": 1.56, "radius_x": 0.054, "radius_z": 0.084}
+    ],
+    "plumes": [
+      {"center": [0.50, 1.08], "radius": 0.100},
+      {"center": [1.05, 0.47], "radius": 0.105},
+      {"center": [1.55, 1.02], "radius": 0.110}
+    ],
+    "base_current": [0.016, -0.006],
+    "shear": {"amplitude": 0.047, "frequency": 5.65, "phase": 1.25},
+    "eddies": [
+      {"center": [0.92, 0.88], "strength": 0.006},
+      {"center": [1.44, 0.70], "strength": -0.007}
+    ]
+  },
+  {
+    "id": "hidden_internal_wave_pinched_corridor",
+    "duration": 9.483162783234262,
+    "start": [0.00, 0.76],
+    "finish": [2.01, 0.81],
+    "workspace": {"x_min": -0.10, "x_max": 2.14, "z_min": 0.20, "z_max": 1.40},
+    "thermocline": {
+      "base": 0.75,
+      "slope": 0.030,
+      "waves": [
+        {"amp": 0.17475088496691818, "freq": 5.068147480516258, "phase": 1.3840196963609435},
+        {"amp": -0.04185528786552396, "freq": 8.942296314472944, "phase": 0.8934042364518266}
+      ]
+    },
+    "samples": [
+      {"x": 0.35818743474022713, "radius_x": 0.035372365330821796, "radius_z": 0.06745395393564967},
+      {"x": 0.7343806084651121, "radius_x": 0.04911043444450904, "radius_z": 0.07224715131861542},
+      {"x": 1.13066773203989, "radius_x": 0.04881071070873701, "radius_z": 0.05520305678511517},
+      {"x": 1.5727727441996262, "radius_x": 0.040034907735535336, "radius_z": 0.07363791340511942}
+    ],
+    "plumes": [
+      {"center": [0.4518364617163883, 1.0383676409834663], "radius": 0.10987802591755229},
+      {"center": [1.1195060434178792, 0.5537314153082471], "radius": 0.10691537089976794},
+      {"center": [1.612564536687457, 1.0933282477634558], "radius": 0.1198530639243712}
+    ],
+    "base_current": [0.012323258027643507, -0.009874095181445988],
+    "shear": {"amplitude": 0.056538466649190385, "frequency": 5.65, "phase": 1.25},
+    "eddies": [
+      {"center": [0.92, 0.88], "strength": 0.006},
+      {"center": [1.44, 0.70], "strength": -0.007}
+    ],
+    "sample_hold_time": 0.21
+  },
+  {
+    "id": "hidden_internal_wave_reversal_slot",
+    "duration": 9.530654712900716,
+    "start": [0.00, 0.76],
+    "finish": [2.01, 0.81],
+    "workspace": {"x_min": -0.10, "x_max": 2.14, "z_min": 0.20, "z_max": 1.40},
+    "thermocline": {
+      "base": 0.75,
+      "slope": 0.030,
+      "waves": [
+        {"amp": 0.1797490814964001, "freq": 4.788872544829989, "phase": 1.4748152338193763},
+        {"amp": -0.04812838634746763, "freq": 9.206144151531365, "phase": 0.7556008862226283}
+      ]
+    },
+    "samples": [
+      {"x": 0.3476663362242051, "radius_x": 0.04713737235483493, "radius_z": 0.06716183540650102},
+      {"x": 0.747920193921952, "radius_x": 0.03604012727467787, "radius_z": 0.0712911718394151},
+      {"x": 1.1472905774584026, "radius_x": 0.032768666244819625, "radius_z": 0.07709244640017364},
+      {"x": 1.5471272133043767, "radius_x": 0.04454868239508429, "radius_z": 0.07047981413691211}
+    ],
+    "plumes": [
+      {"center": [0.46647469800441377, 1.0745711704753635], "radius": 0.117379906330882},
+      {"center": [1.085534519867254, 0.5293395534770721], "radius": 0.12487039854738267},
+      {"center": [1.6378103172062657, 1.0613092639976944], "radius": 0.10858445574123067}
+    ],
+    "base_current": [0.016580110499935453, -0.006867797478164355],
+    "shear": {"amplitude": 0.0605292304792439, "frequency": 5.65, "phase": 1.25},
+    "eddies": [
+      {"center": [0.92, 0.88], "strength": 0.006},
+      {"center": [1.44, 0.70], "strength": -0.007}
+    ],
+    "sample_hold_time": 0.21
+  }
+]

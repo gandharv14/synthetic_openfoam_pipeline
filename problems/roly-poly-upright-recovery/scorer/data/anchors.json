@@ -1,0 +1,13 @@
+{
+  "hold_upright_perfect": 0.97,
+  "hold_upright_floor": 0.88,
+  "hold_tilt_perfect": 0.035,
+  "hold_tilt_floor": 0.14,
+  "hold_vel_perfect": 0.25,
+  "hold_vel_floor": 1.1,
+  "effort_min_active": 0.12,
+  "effort_perfect": 1.8,
+  "effort_floor": 4.5,
+  "jerk_perfect": 0.45,
+  "jerk_floor": 1.2
+}

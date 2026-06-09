@@ -1,0 +1,14 @@
+{
+  "family": "postprocessing_instrumentation",
+  "mass_balance_max": 0.002,
+  "postprocessing_required": [
+    "residuals",
+    "probes",
+    "fieldMinMax"
+  ],
+  "pressure_drop_max": 5.0,
+  "pressure_drop_min": 0.05,
+  "residual_max": 0.0001,
+  "source_target": null,
+  "tolerance": 0.05
+}

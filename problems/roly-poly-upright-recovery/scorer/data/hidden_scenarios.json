@@ -1,0 +1,72 @@
+[
+  {
+    "id": "mild_tip",
+    "family": "tilt",
+    "duration": 10.0,
+    "floor_friction": 1.05,
+    "base_mass": 1.25,
+    "mass_offset": 0.0,
+    "com_lateral_offset": 0.0,
+    "damping_scale": 1.0,
+    "base_tilt_damping": 0.22,
+    "initial_tilt": 0.32,
+    "initial_tilt_vel": 0.0,
+    "recovery_upright_min": 0.82
+  },
+  {
+    "id": "steep_tip",
+    "family": "tilt",
+    "duration": 10.0,
+    "floor_friction": 0.95,
+    "base_mass": 1.25,
+    "mass_offset": 0.0,
+    "com_lateral_offset": 0.0,
+    "damping_scale": 1.0,
+    "base_tilt_damping": 0.2,
+    "initial_tilt": 0.52,
+    "initial_tilt_vel": -0.15,
+    "recovery_upright_min": 0.82
+  },
+  {
+    "id": "sticky_floor",
+    "family": "friction",
+    "duration": 10.0,
+    "floor_friction": 1.65,
+    "base_mass": 1.25,
+    "mass_offset": 0.05,
+    "com_lateral_offset": 0.0,
+    "damping_scale": 1.15,
+    "base_tilt_damping": 0.24,
+    "initial_tilt": 0.44,
+    "initial_tilt_vel": 0.08,
+    "recovery_upright_min": 0.82
+  },
+  {
+    "id": "offset_com",
+    "family": "mass",
+    "duration": 10.0,
+    "floor_friction": 1.1,
+    "base_mass": 1.25,
+    "mass_offset": 0.12,
+    "com_lateral_offset": 0.018,
+    "damping_scale": 1.05,
+    "base_tilt_damping": 0.21,
+    "initial_tilt": 0.4,
+    "initial_tilt_vel": -0.1,
+    "recovery_upright_min": 0.82
+  },
+  {
+    "id": "adversarial_combo",
+    "family": "combo",
+    "duration": 10.0,
+    "floor_friction": 1.35,
+    "base_mass": 1.25,
+    "mass_offset": 0.18,
+    "com_lateral_offset": 0.022,
+    "damping_scale": 1.25,
+    "base_tilt_damping": 0.26,
+    "initial_tilt": 0.58,
+    "initial_tilt_vel": -0.22,
+    "recovery_upright_min": 0.82
+  }
+]

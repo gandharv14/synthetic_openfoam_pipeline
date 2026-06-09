@@ -1,0 +1,92 @@
+<mujoco model="gpu_morphing_wing_gust_rejection">
+  <compiler angle="radian" coordinate="local" autolimits="true"/>
+  <option timestep="0.004" integrator="RK4" gravity="0 0 -9.81" iterations="80" tolerance="1e-9"/>
+
+  <visual>
+    <global offwidth="1280" offheight="720"/>
+  </visual>
+
+  <default>
+    <geom condim="3" friction="0.8 0.02 0.002" solref="0.015 1.0" solimp="0.9 0.95 0.001"/>
+    <joint damping="0.24" stiffness="0.35" armature="0.018" limited="true"/>
+  </default>
+
+  <worldbody>
+    <light name="key" pos="0 -3 3" dir="0 1 -1"/>
+    <geom name="floor" type="plane" size="3.0 2.0 0.05" rgba="0.12 0.15 0.18 1"/>
+
+    <body name="test_stand" pos="0 0 1.16">
+      <geom name="stand" type="cylinder" fromto="0 0 -0.85 0 0 0" size="0.025" mass="0.2" rgba="0.22 0.24 0.28 1"/>
+      <geom name="fuselage" type="box" pos="0 0 0" size="0.34 0.055 0.045" mass="0.70" rgba="0.30 0.34 0.42 1"/>
+      <site name="root_site" pos="0 0 0" size="0.018" rgba="1 0.8 0.1 1"/>
+
+      <body name="wing_hub" pos="0 0 0">
+        <joint name="root_roll" type="hinge" axis="1 0 0" range="-0.48 0.48" damping="0.34" stiffness="0.40" armature="0.030"/>
+        <geom name="center_spar" type="capsule" fromto="0 -0.09 0 0 0.09 0" size="0.026" mass="0.28" rgba="0.45 0.48 0.55 1"/>
+
+        <body name="left_inner" pos="0 0.09 0">
+          <joint name="left_inner" type="hinge" axis="1 0 0" range="-0.62 0.78" damping="0.28" stiffness="0.32" armature="0.024"/>
+          <geom name="left_inner_spar" type="capsule" fromto="0 0 0 0 0.32 0" size="0.025" mass="0.34" rgba="0.12 0.48 0.88 1"/>
+          <geom name="left_inner_skin" type="box" pos="0 0.16 0.004" size="0.20 0.15 0.006" mass="0.12" rgba="0.10 0.32 0.68 0.86"/>
+          <body name="left_mid" pos="0 0.32 0">
+            <joint name="left_mid" type="hinge" axis="1 0 0" range="-0.70 0.82" damping="0.22" stiffness="0.25" armature="0.018"/>
+            <geom name="left_mid_spar" type="capsule" fromto="0 0 0 0 0.28 0" size="0.020" mass="0.24" rgba="0.10 0.62 0.80 1"/>
+            <geom name="left_mid_skin" type="box" pos="0 0.14 0.004" size="0.16 0.13 0.005" mass="0.08" rgba="0.08 0.44 0.60 0.84"/>
+            <body name="left_tip" pos="0 0.28 0">
+              <joint name="left_tip" type="hinge" axis="1 0 0" range="-0.78 0.88" damping="0.16" stiffness="0.18" armature="0.014"/>
+              <geom name="left_tip_spar" type="capsule" fromto="0 0 0 0 0.22 0" size="0.016" mass="0.15" rgba="0.12 0.76 0.58 1"/>
+              <geom name="left_tip_skin" type="box" pos="0 0.11 0.004" size="0.11 0.10 0.004" mass="0.05" rgba="0.10 0.56 0.40 0.82"/>
+              <site name="left_tip_site" pos="0 0.22 0" size="0.020" rgba="0.1 1 0.3 1"/>
+            </body>
+          </body>
+        </body>
+
+        <body name="right_inner" pos="0 -0.09 0">
+          <joint name="right_inner" type="hinge" axis="-1 0 0" range="-0.62 0.78" damping="0.28" stiffness="0.32" armature="0.024"/>
+          <geom name="right_inner_spar" type="capsule" fromto="0 0 0 0 -0.32 0" size="0.025" mass="0.34" rgba="0.88 0.40 0.18 1"/>
+          <geom name="right_inner_skin" type="box" pos="0 -0.16 0.004" size="0.20 0.15 0.006" mass="0.12" rgba="0.72 0.24 0.10 0.86"/>
+          <body name="right_mid" pos="0 -0.32 0">
+            <joint name="right_mid" type="hinge" axis="-1 0 0" range="-0.70 0.82" damping="0.22" stiffness="0.25" armature="0.018"/>
+            <geom name="right_mid_spar" type="capsule" fromto="0 0 0 0 -0.28 0" size="0.020" mass="0.24" rgba="0.94 0.55 0.16 1"/>
+            <geom name="right_mid_skin" type="box" pos="0 -0.14 0.004" size="0.16 0.13 0.005" mass="0.08" rgba="0.70 0.38 0.08 0.84"/>
+            <body name="right_tip" pos="0 -0.28 0">
+              <joint name="right_tip" type="hinge" axis="-1 0 0" range="-0.78 0.88" damping="0.16" stiffness="0.18" armature="0.014"/>
+              <geom name="right_tip_spar" type="capsule" fromto="0 0 0 0 -0.22 0" size="0.016" mass="0.15" rgba="0.96 0.72 0.18 1"/>
+              <geom name="right_tip_skin" type="box" pos="0 -0.11 0.004" size="0.11 0.10 0.004" mass="0.05" rgba="0.76 0.52 0.08 0.82"/>
+              <site name="right_tip_site" pos="0 -0.22 0" size="0.020" rgba="0.1 1 0.3 1"/>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <motor name="root_roll_motor" joint="root_roll" gear="50" ctrlrange="-1 1"/>
+    <motor name="left_inner_motor" joint="left_inner" gear="34" ctrlrange="-1 1"/>
+    <motor name="left_mid_motor" joint="left_mid" gear="26" ctrlrange="-1 1"/>
+    <motor name="left_tip_motor" joint="left_tip" gear="18" ctrlrange="-1 1"/>
+    <motor name="right_inner_motor" joint="right_inner" gear="34" ctrlrange="-1 1"/>
+    <motor name="right_mid_motor" joint="right_mid" gear="26" ctrlrange="-1 1"/>
+    <motor name="right_tip_motor" joint="right_tip" gear="18" ctrlrange="-1 1"/>
+  </actuator>
+
+  <sensor>
+    <framepos name="left_tip_pos" objtype="site" objname="left_tip_site"/>
+    <framepos name="right_tip_pos" objtype="site" objname="right_tip_site"/>
+    <jointpos name="root_roll_pos" joint="root_roll"/>
+    <jointvel name="root_roll_vel" joint="root_roll"/>
+    <jointpos name="left_inner_pos" joint="left_inner"/>
+    <jointvel name="left_inner_vel" joint="left_inner"/>
+    <jointpos name="left_mid_pos" joint="left_mid"/>
+    <jointvel name="left_mid_vel" joint="left_mid"/>
+    <jointpos name="left_tip_pos_joint" joint="left_tip"/>
+    <jointvel name="left_tip_vel" joint="left_tip"/>
+    <jointpos name="right_inner_pos" joint="right_inner"/>
+    <jointvel name="right_inner_vel" joint="right_inner"/>
+    <jointpos name="right_mid_pos" joint="right_mid"/>
+    <jointvel name="right_mid_vel" joint="right_mid"/>
+    <jointpos name="right_tip_pos_joint" joint="right_tip"/>
+    <jointvel name="right_tip_vel" joint="right_tip"/>
+  </sensor>
+</mujoco>

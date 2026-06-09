@@ -1,0 +1,99 @@
+{
+  "expected_metrics": {
+    "mass_balance_max": 0.002,
+    "postprocessing_required": [
+      "residuals",
+      "fluxBalance"
+    ],
+    "pressure_drop_max": 5.0,
+    "pressure_drop_min": 0.05,
+    "residual_max": 0.0001,
+    "source_target": null,
+    "tolerance": 0.05
+  },
+  "family": "boundary_condition_repair",
+  "forbidden_edits": [
+    {
+      "description": "Must preserve physical input",
+      "path": "constant/transportProperties",
+      "sha256": "9be7e9acaa702482805a26b1332a3b4cffaf8aec4c109cf98093b7a3bcba6b54"
+    }
+  ],
+  "generation_report": {
+    "claude_hard_rationale": "Likely Claude-hard because the visible symptom can be patched several ways, but hidden flow reversal and viscosity variants require multi-file OpenFOAM BC consistency rather than a single text edit.",
+    "expected_metrics": {
+      "mass_balance_max": 0.002,
+      "postprocessing_required": [
+        "residuals",
+        "fluxBalance"
+      ],
+      "pressure_drop_max": 5.0,
+      "pressure_drop_min": 0.05,
+      "residual_max": 0.0001,
+      "source_target": null,
+      "tolerance": 0.05
+    },
+    "family_title": "Boundary-condition repair",
+    "oracle_strategy": "Extract starter_case.tar.gz, apply the family-specific OpenFOAM dictionary repair, then package the corrected case as /tmp/output/fixed_case.tar.gz.",
+    "prompt_rewrite": {
+      "model": null,
+      "reason": "prompt rewriting disabled by config",
+      "status": "disabled"
+    },
+    "symptom": "The channel case runs unreliably and violates pressure/flux consistency at hidden operating points."
+  },
+  "hidden_variants": [
+    {
+      "changes": {
+        "inlet_velocity": 1.25
+      },
+      "expected_overrides": {},
+      "name": "changed_inlet_velocity"
+    },
+    {
+      "changes": {
+        "viscosity": 0.0125
+      },
+      "expected_overrides": {},
+      "name": "changed_viscosity"
+    }
+  ],
+  "output_contract": "/tmp/output/fixed_case.tar.gz",
+  "rationale": "Likely Claude-hard because the visible symptom can be patched several ways, but hidden flow reversal and viscosity variants require multi-file OpenFOAM BC consistency rather than a single text edit.",
+  "seed": 123,
+  "seed_case": {
+    "case_kind": "channel",
+    "compatible_families": [
+      "boundary_condition_repair",
+      "solver_convergence_repair"
+    ],
+    "parameters": {
+      "inlet_velocity": 1.0,
+      "viscosity": 0.01
+    },
+    "runtime_estimate_sec": 30,
+    "seed_id": "laminar-channel",
+    "solver": "simpleFoam"
+  },
+  "skill_graph": {
+    "family": "boundary_condition_repair",
+    "hidden_generalization_axes": [
+      "inlet velocity",
+      "viscosity",
+      "write interval",
+      "probe location",
+      "source strength",
+      "mesh grading"
+    ],
+    "requires_multi_file_consistency": true,
+    "skills": [
+      "boundary-condition consistency",
+      "mass-balance validation",
+      "hidden Reynolds robustness"
+    ]
+  },
+  "status": "candidate",
+  "task_dir": "lbx-rl-tasks-iso-template/problems/openfoam-bc-repair-40c6b98b",
+  "task_id": "openfoam-bc-repair-40c6b98b",
+  "zip_path": null
+}

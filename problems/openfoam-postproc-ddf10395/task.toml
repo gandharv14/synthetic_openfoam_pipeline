@@ -1,0 +1,36 @@
+schema_version = "1.1"
+
+[task]
+name = "labelbox/openfoam-postproc-ddf10395"
+description = "The case solves but produces no residual, probe, flux, or field extrema evidence for review."
+
+[environment]
+cpus = 4
+memory_mb = 8192
+storage_mb = 10000
+gpus = 0
+gpu_types = []
+allow_internet = true
+
+[agent]
+timeout_sec = 1800
+
+[verifier]
+timeout_sec = 1200
+env = []
+
+[difficulty]
+task_type = "cfd"
+domain = "openfoam-repair"
+
+[ground_truth]
+in_container = true
+render_command = "bash solution/render.sh"
+render_outputs = [
+  { path = "/tmp/output/rendering.mp4", required = false, description = "Optional synthetic OpenFOAM reviewer artifact" },
+]
+
+[[outputs]]
+path = "/tmp/output/fixed_case.tar.gz"
+required = true
+description = "Corrected OpenFOAM case archive"

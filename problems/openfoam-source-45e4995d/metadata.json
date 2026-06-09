@@ -1,0 +1,7 @@
+{
+  "benchmark": "taiga_task",
+  "problem_data": {
+    "description": "The scalar/momentum source is present but calibrated to the wrong target response.",
+    "instance_id": "openfoam-source-45e4995d"
+  }
+}
