@@ -4,7 +4,7 @@ from itertools import product
 from pathlib import Path
 from typing import Any
 
-from synthetic_openfoam_pipeline.openfoam.dictionary_edit import replace_required
+from synthetic_openfoam_pipeline.openfoam.dictionary_edit import apply_structured_edit, replace_required
 from synthetic_openfoam_pipeline.openfoam.case_model import pick_seed_for_family
 from synthetic_openfoam_pipeline.schemas import (
     CorruptionSpec,
@@ -452,6 +452,8 @@ def apply_starter_perturbation(case_dir: Path, definition: FamilyDefinition) -> 
 
 
 def _apply_dictionary_edit(path: Path, step: DictionaryEditSpec) -> None:
+    if apply_structured_edit(path, step.old, step.new, mode=step.mode):
+        return
     if step.mode == "replace":
         replace_required(path, step.old, step.new)
         return

@@ -101,6 +101,7 @@ def solution_script(task_id: str, family: str, marker: dict) -> str:
         mkdir -p "${{OUT}}" "${{WORK}}/case"
         tar -xzf "${{DATA_DIR}}/starter_case.tar.gz" -C "${{WORK}}/case" --strip-components=1
         python3 - "${{WORK}}/case" <<'PY'
+        import re
         import sys
         from pathlib import Path
         case = Path(sys.argv[1])
@@ -181,36 +182,104 @@ def solution_script(task_id: str, family: str, marker: dict) -> str:
         }}
         '''
 
-        def replace(path: Path, old: str, new: str) -> None:
+        def block_span(text: str, name: str):
+            match = re.search(r"\\b" + re.escape(name) + r"\\b\\s*\\{{", text)
+            if not match:
+                return None
+            start = match.start()
+            pos = match.end() - 1
+            depth = 0
+            for idx in range(pos, len(text)):
+                if text[idx] == "{{":
+                    depth += 1
+                elif text[idx] == "}}":
+                    depth -= 1
+                    if depth == 0:
+                        return start, idx + 1, text[pos + 1:idx]
+            raise SystemExit(f"unclosed OpenFOAM block {{name}}")
+
+        def set_patch(path: Path, patch: str, entries: dict[str, str]) -> None:
             text = path.read_text()
-            if old not in text:
-                raise SystemExit(f"expected text not found in {{path}}: {{old!r}}")
-            path.write_text(text.replace(old, new))
+            boundary = block_span(text, "boundaryField")
+            if boundary is None:
+                raise SystemExit(f"boundaryField not found in {{path}}")
+            patch_block = block_span(boundary[2], patch)
+            if patch_block is None:
+                raise SystemExit(f"patch {{patch}} not found in {{path}}")
+            order = [key for key in ("type", "inletValue", "value") if key in entries]
+            order.extend(key for key in entries if key not in order)
+            line = "    " + patch + " {{ " + " ".join(key + " " + entries[key] + ";" for key in order) + " }}"
+            body = boundary[2]
+            path.write_text(text[:boundary[0]] + "boundaryField\\n{{" + body[:patch_block[0]] + line + body[patch_block[1]:] + "}}" + text[boundary[1]:])
+
+        def set_entry(path: Path, key: str, value: str) -> None:
+            text = path.read_text()
+            next_text, count = re.subn(r"(\\b" + re.escape(key) + r"\\s+)([^;]+);", r"\\g<1>" + value + ";", text, count=1)
+            if count != 1:
+                raise SystemExit(f"entry {{key}} not found in {{path}}")
+            path.write_text(next_text)
+
+        def set_functions(path: Path, functions: str) -> None:
+            text = path.read_text()
+            block = block_span(text, "functions")
+            if block is None:
+                path.write_text(text.rstrip() + "\\n" + functions)
+            else:
+                path.write_text(text[:block[0]] + functions.rstrip() + "\\n" + text[block[1]:])
+
+        def set_div_phi_u(path: Path, scheme: str) -> None:
+            text = path.read_text()
+            next_text, count = re.subn(r"\\bdiv\\(phi,U\\)\\s+[^;]+;", "div(phi,U) " + scheme + ";", text, count=1)
+            if count != 1:
+                raise SystemExit(f"div(phi,U) not found in {{path}}")
+            path.write_text(next_text)
+
+        def set_source(path: Path, value: float) -> None:
+            text = path.read_text()
+            next_text, count = re.subn(r"\\bU\\s+\\(\\([^)]+\\)\\s+0\\);", "U ((%.3f 0 0) 0);" % value, text, count=1)
+            if count != 1:
+                raise SystemExit(f"source U entry not found in {{path}}")
+            path.write_text(next_text)
+
+        def set_grading(path: Path, x: float) -> None:
+            text = path.read_text()
+            next_text, count = re.subn(r"\\bsimpleGrading\\s+\\([^)]+\\)", "simpleGrading (%g 1 1)" % x, text)
+            if count < 1:
+                raise SystemExit(f"simpleGrading not found in {{path}}")
+            path.write_text(next_text)
+
+        def set_cells(path: Path, old: tuple[int, int, int], new: tuple[int, int, int]) -> None:
+            text = path.read_text()
+            old_text = "(%d %d %d) simpleGrading" % old
+            new_text = "(%d %d %d) simpleGrading" % new
+            if old_text not in text:
+                raise SystemExit(f"cell count {{old_text}} not found in {{path}}")
+            path.write_text(text.replace(old_text, new_text, 1))
 
         family = {family!r}
         if family == "boundary_condition_repair":
-            replace(case / "0" / "p", "outlet {{ type zeroGradient; }}", "outlet {{ type fixedValue; value uniform 0; }}")
+            set_patch(case / "0" / "p", "outlet", {{"type": "fixedValue", "value": "uniform 0"}})
         elif family == "postprocessing_instrumentation":
-            replace(case / "system" / "controlDict", "functions {{}}", FUNCTIONS)
+            set_functions(case / "system" / "controlDict", FUNCTIONS)
         elif family == "solver_convergence_repair":
-            replace(case / "system" / "fvSchemes", "div(phi,U) Gauss linear;", "div(phi,U) Gauss linearUpwind grad(U);")
+            set_div_phi_u(case / "system" / "fvSchemes", "Gauss linearUpwind grad(U)")
         elif family == "mesh_quality_repair":
-            replace(case / "system" / "blockMeshDict", "simpleGrading (20 1 1)", "simpleGrading (1.5 1 1)")
+            set_grading(case / "system" / "blockMeshDict", 1.5)
         elif family == "source_term_calibration":
-            replace(case / "constant" / "fvOptions", "U ((0.000 0 0) 0);", "U ((0.200 0 0) 0);")
+            set_source(case / "constant" / "fvOptions", 0.2)
         elif family == "flow_rate_targeting":
-            replace(case / "0" / "U", "inlet {{ type fixedValue; value uniform (0.35 0 0); }}", "inlet {{ type fixedValue; value uniform (1 0 0); }}")
+            set_patch(case / "0" / "U", "inlet", {{"type": "fixedValue", "value": "uniform (1 0 0)"}})
         elif family == "pressure_drop_calibration":
-            replace(case / "0" / "p", "outlet {{ type fixedValue; value uniform 2; }}", "outlet {{ type fixedValue; value uniform 0; }}")
+            set_patch(case / "0" / "p", "outlet", {{"type": "fixedValue", "value": "uniform 0"}})
         elif family == "transient_setup_repair":
-            replace(case / "system" / "controlDict", "endTime 10;", "endTime 100;")
-            replace(case / "system" / "controlDict", "writeInterval 100;", "writeInterval 20;")
+            set_entry(case / "system" / "controlDict", "endTime", "100")
+            set_entry(case / "system" / "controlDict", "writeInterval", "20")
         elif family == "force_coeff_instrumentation":
-            replace(case / "system" / "controlDict", "functions {{}}", FORCE_FUNCTIONS)
+            set_functions(case / "system" / "controlDict", FORCE_FUNCTIONS)
         elif family == "scalar_transport_repair":
-            replace(case / "0" / "T", "movingWall {{ type zeroGradient; }}", "movingWall {{ type fixedValue; value uniform 310; }}")
+            set_patch(case / "0" / "T", "movingWall", {{"type": "fixedValue", "value": "uniform 310"}})
         elif family == "mesh_resolution_tradeoff":
-            replace(case / "system" / "blockMeshDict", "(80 40 1) simpleGrading (1.5 1 1)", "(20 10 1) simpleGrading (1.5 1 1)")
+            set_cells(case / "system" / "blockMeshDict", (80, 40, 1), (20, 10, 1))
         else:
             raise SystemExit(f"unknown family: {{family}}")
         PY
@@ -373,30 +442,102 @@ def replace_regex(path: Path, pattern: str, repl: str) -> None:
     path.write_text(re.sub(pattern, repl, text, count=1, flags=re.S))
 
 
+def block_span(text: str, name: str) -> tuple[int, int, str] | None:
+    match = re.search(r"\b" + re.escape(name) + r"\b\s*\{", text)
+    if not match:
+        return None
+    start = match.start()
+    pos = match.end() - 1
+    depth = 0
+    for idx in range(pos, len(text)):
+        if text[idx] == "{":
+            depth += 1
+        elif text[idx] == "}":
+            depth -= 1
+            if depth == 0:
+                return start, idx + 1, text[pos + 1:idx]
+    return None
+
+
+def entry_map(snippet: str) -> dict[str, str]:
+    body_match = re.search(r"\{(.*)\}", snippet, flags=re.S)
+    body = body_match.group(1) if body_match else snippet
+    return {key: value.strip() for key, value in re.findall(r"\b([A-Za-z_][\w]*)\s+([^;{}]+);", body)}
+
+
+def patch_entries(path: Path, patch: str) -> dict[str, str]:
+    boundary = block_span(read_text(path), "boundaryField")
+    if boundary is None:
+        return {}
+    patch_block = block_span(boundary[2], patch)
+    if patch_block is None:
+        return {}
+    return entry_map(patch_block[2])
+
+
+def set_patch(path: Path, patch: str, entries: dict[str, str]) -> None:
+    text = read_text(path)
+    boundary = block_span(text, "boundaryField")
+    if boundary is None:
+        return
+    patch_block = block_span(boundary[2], patch)
+    if patch_block is None:
+        return
+    order = [key for key in ("type", "inletValue", "value") if key in entries]
+    order.extend(key for key in entries if key not in order)
+    line = f"    {patch} {{ " + " ".join(f"{key} {entries[key]};" for key in order) + " }"
+    body = boundary[2]
+    path.write_text(text[:boundary[0]] + "boundaryField\n{" + body[:patch_block[0]] + line + body[patch_block[1]:] + "}" + text[boundary[1]:])
+
+
+def set_internal_field(path: Path, value: str) -> None:
+    replace_regex(path, r"\binternalField\s+uniform\s+[^;]+;", f"internalField uniform {value};")
+
+
+def set_entry(path: Path, key: str, value: str) -> None:
+    replace_regex(path, r"\b" + re.escape(key) + r"\s+[^;]+;", f"{key} {value};")
+
+
+def set_probe_location(path: Path, loc: list[float]) -> None:
+    replace_regex(path, r"\bprobeLocations\s*\(\([^)]+\)\);", f"probeLocations (({loc[0]} {loc[1]} {loc[2]}));")
+
+
+def set_source(path: Path, value: float) -> None:
+    replace_regex(path, r"\bU\s+\(\([^)]+\)\s+0\);", f"U (({value:.3f} 0 0) 0);")
+
+
+def set_grading(path: Path, value: float) -> None:
+    replace_regex(path, r"\bsimpleGrading\s+\([^)]+\)", f"simpleGrading ({value:g} 1 1)")
+
+
+def functions_present(case_dir: Path, names: list[str]) -> dict[str, bool]:
+    block = block_span(read_text(case_dir / "system" / "controlDict"), "functions")
+    body = block[2] if block else ""
+    return {name: bool(re.search(rf"\b{name}\b", body)) for name in names}
+
+
 def apply_hidden_variant(case_dir: Path, variant: dict[str, Any]) -> None:
     changes = variant.get("changes", {})
     if "viscosity" in changes:
-        replace_regex(case_dir / "constant" / "transportProperties", r"nu\s+[-+0-9.eE]+;", f"nu {float(changes['viscosity']):.6f};")
+        set_entry(case_dir / "constant" / "transportProperties", "nu", f"{float(changes['viscosity']):.6f}")
     if "write_interval" in changes:
-        replace_regex(case_dir / "system" / "controlDict", r"writeInterval\s+\d+;", f"writeInterval {int(changes['write_interval'])};")
+        set_entry(case_dir / "system" / "controlDict", "writeInterval", str(int(changes["write_interval"])))
     if "inlet_velocity" in changes:
         value = float(changes["inlet_velocity"])
         u = case_dir / "0" / "U"
         if u.exists():
-            text = u.read_text()
-            text = re.sub(r"internalField\s+uniform\s+\([^)]+\);", f"internalField uniform ({value:g} 0 0);", text, count=1)
-            next_text = re.sub(r"inlet\s*\{\s*type\s+fixedValue;\s*value\s+uniform\s+\([^)]+\);\s*\}", f"inlet {{ type fixedValue; value uniform ({value:g} 0 0); }}", text, count=1)
-            if next_text == text:
-                next_text = re.sub(r"movingWall\s*\{\s*type\s+fixedValue;\s*value\s+uniform\s+\([^)]+\);\s*\}", f"movingWall {{ type fixedValue; value uniform ({value:g} 0 0); }}", text, count=1)
-            text = next_text
-            u.write_text(text)
+            vector = f"({value:g} 0 0)"
+            set_internal_field(u, vector)
+            if patch_entries(u, "inlet"):
+                set_patch(u, "inlet", {"type": "fixedValue", "value": f"uniform {vector}"})
+            elif patch_entries(u, "movingWall"):
+                set_patch(u, "movingWall", {"type": "fixedValue", "value": f"uniform {vector}"})
     if "probe_location" in changes:
-        loc = changes["probe_location"]
-        replace_regex(case_dir / "system" / "controlDict", r"probeLocations\s*\(\([^)]+\)\);", f"probeLocations (({loc[0]} {loc[1]} {loc[2]}));")
+        set_probe_location(case_dir / "system" / "controlDict", changes["probe_location"])
     if "source_strength" in changes:
-        replace_regex(case_dir / "constant" / "fvOptions", r"U\s+\(\([^)]+\)\s+0\);", f"U (({float(changes['source_strength']):.3f} 0 0) 0);")
+        set_source(case_dir / "constant" / "fvOptions", float(changes["source_strength"]))
     if "mesh_grading" in changes:
-        replace_regex(case_dir / "system" / "blockMeshDict", r"simpleGrading\s+\([^)]+\)", f"simpleGrading ({float(changes['mesh_grading']):g} 1 1)")
+        set_grading(case_dir / "system" / "blockMeshDict", float(changes["mesh_grading"]))
 
 
 def read_text(path: Path) -> str:
@@ -415,8 +556,8 @@ def mesh_grading(case_dir: Path) -> float | None:
 
 def family_repair_ok(case_dir: Path, family: str, expected: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
     if family == "boundary_condition_repair":
-        p = read_text(case_dir / "0" / "p")
-        ok = bool(re.search(r"outlet\s*\{[^}]*type\s+fixedValue;[^}]*value\s+uniform\s+0;", p, re.S))
+        outlet = patch_entries(case_dir / "0" / "p", "outlet")
+        ok = outlet.get("type") == "fixedValue" and outlet.get("value") == "uniform 0"
         return ok, {"outlet_pressure_fixed_value": ok}
     if family == "solver_convergence_repair":
         schemes = read_text(case_dir / "system" / "fvSchemes")
@@ -427,8 +568,7 @@ def family_repair_ok(case_dir: Path, family: str, expected: dict[str, Any]) -> t
         ok = grading is not None and grading <= 2.0
         return ok, {"simple_grading_x": grading}
     if family == "postprocessing_instrumentation":
-        control = read_text(case_dir / "system" / "controlDict")
-        present = {name: bool(re.search(rf"\b{name}\b", control)) for name in ["residuals", "probes", "fieldMinMax"]}
+        present = functions_present(case_dir, ["residuals", "probes", "fieldMinMax"])
         return all(present.values()), present
     if family == "source_term_calibration":
         value = source_strength(case_dir)
@@ -437,12 +577,12 @@ def family_repair_ok(case_dir: Path, family: str, expected: dict[str, Any]) -> t
         ok = value is not None and abs(value - target) <= tol
         return ok, {"source_strength": value, "target": target, "tolerance": tol}
     if family == "flow_rate_targeting":
-        u = read_text(case_dir / "0" / "U")
-        ok = bool(re.search(r"inlet\s*\{[^}]*type\s+fixedValue;[^}]*value\s+uniform\s+\(1\s+0\s+0\);", u, re.S))
+        inlet = patch_entries(case_dir / "0" / "U", "inlet")
+        ok = inlet.get("type") == "fixedValue" and inlet.get("value") == "uniform (1 0 0)"
         return ok, {"target_inlet_velocity": ok}
     if family == "pressure_drop_calibration":
-        p = read_text(case_dir / "0" / "p")
-        ok = bool(re.search(r"outlet\s*\{[^}]*type\s+fixedValue;[^}]*value\s+uniform\s+0;", p, re.S))
+        outlet = patch_entries(case_dir / "0" / "p", "outlet")
+        ok = outlet.get("type") == "fixedValue" and outlet.get("value") == "uniform 0"
         return ok, {"zero_outlet_pressure_datum": ok}
     if family == "transient_setup_repair":
         control = read_text(case_dir / "system" / "controlDict")
@@ -450,12 +590,11 @@ def family_repair_ok(case_dir: Path, family: str, expected: dict[str, Any]) -> t
         write_ok = bool(re.search(r"\bwriteInterval\s+20;", control))
         return end_ok and write_ok, {"end_time_100": end_ok, "write_interval_20": write_ok}
     if family == "force_coeff_instrumentation":
-        control = read_text(case_dir / "system" / "controlDict")
-        present = {name: bool(re.search(rf"\b{name}\b", control)) for name in ["residuals", "probes", "fieldMinMax", "forceCoeffs"]}
+        present = functions_present(case_dir, ["residuals", "probes", "fieldMinMax", "forceCoeffs"])
         return all(present.values()), present
     if family == "scalar_transport_repair":
-        t = read_text(case_dir / "0" / "T")
-        ok = bool(re.search(r"movingWall\s*\{[^}]*type\s+fixedValue;[^}]*value\s+uniform\s+310;", t, re.S))
+        wall = patch_entries(case_dir / "0" / "T", "movingWall")
+        ok = wall.get("type") == "fixedValue" and wall.get("value") == "uniform 310"
         return ok, {"heated_wall_temperature_fixed": ok}
     if family == "mesh_resolution_tradeoff":
         mesh = read_text(case_dir / "system" / "blockMeshDict")
