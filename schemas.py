@@ -117,6 +117,15 @@ class TaskCandidate:
     generation_report: dict[str, Any] = field(default_factory=dict)
     task_spec: OpenFoamTaskSpec | None = None
 
+    @property
+    def hidden_variant_axes(self) -> list[str]:
+        axes: list[str] = []
+        for variant in self.hidden_variants:
+            for axis in variant.changes:
+                if axis not in axes:
+                    axes.append(axis)
+        return axes
+
     def to_manifest(self) -> dict[str, Any]:
         data = {
             "task_id": self.task_id,
@@ -124,6 +133,7 @@ class TaskCandidate:
             "seed": self.seed,
             "seed_case": asdict(self.seed_case),
             "skill_graph": self.skill_graph,
+            "hidden_variant_axes": self.hidden_variant_axes,
             "hidden_variants": [asdict(v) for v in self.hidden_variants],
             "expected_metrics": asdict(self.expected_metrics),
             "forbidden_edits": [asdict(e) for e in self.forbidden_edits],

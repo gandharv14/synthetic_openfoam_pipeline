@@ -1,6 +1,8 @@
 from __future__ import annotations
 from dataclasses import dataclass
+from itertools import product
 from pathlib import Path
+from typing import Any
 
 from synthetic_openfoam_pipeline.openfoam.dictionary_edit import replace_required
 from synthetic_openfoam_pipeline.openfoam.case_model import pick_seed_for_family
@@ -13,6 +15,19 @@ from synthetic_openfoam_pipeline.schemas import (
     OpenFoamTaskSpec,
     OracleRepairSpec,
 )
+from synthetic_openfoam_pipeline.utils.hashing import stable_hash
+
+
+PRIVATE_VARIANTS_PER_TASK = 4
+
+VARIANT_PARAMETER_GRIDS: dict[str, tuple[Any, ...]] = {
+    "inlet_velocity": (0.75, 1.15, 1.35, 1.6),
+    "viscosity": (0.0065, 0.008, 0.0125, 0.016),
+    "write_interval": (5, 8, 13, 21),
+    "probe_location": ((0.5, 0.25, 0.05), (0.75, 0.1, 0.0), (1.25, 0.5, 0.05), (1.6, 0.75, 0.05)),
+    "source_strength": (0.16, 0.18, 0.22, 0.24),
+    "mesh_grading": (1.2, 1.7, 1.85, 2.0),
+}
 
 
 @dataclass(frozen=True)
@@ -38,15 +53,64 @@ class FamilyDefinition:
 
 
 def _variants(*names: str) -> list[HiddenVariant]:
-    lookup = {
-        "inlet_velocity": HiddenVariant("changed_inlet_velocity", {"inlet_velocity": 1.25}),
-        "viscosity": HiddenVariant("changed_viscosity", {"viscosity": 0.0125}),
-        "write_interval": HiddenVariant("changed_write_interval", {"write_interval": 7}),
-        "probe_location": HiddenVariant("changed_probe_location", {"probe_location": [0.75, 0.1, 0.0]}),
-        "source_strength": HiddenVariant("changed_source_strength", {"source_strength": 0.24}),
-        "mesh_grading": HiddenVariant("mild_mesh_grading", {"mesh_grading": 1.8}),
-    }
-    return [lookup[name] for name in names]
+    for name in names:
+        if name not in VARIANT_PARAMETER_GRIDS:
+            raise ValueError(f"Unknown hidden variant axis: {name}")
+    variants: list[HiddenVariant] = []
+    for offset, values in enumerate(product(*(VARIANT_PARAMETER_GRIDS[name] for name in names))):
+        changes = {name: _grid_value(name, value) for name, value in zip(names, values)}
+        variants.append(HiddenVariant(f"grid_variant_{offset:02d}", changes))
+    return variants
+
+
+def _grid_value(name: str, value: Any) -> Any:
+    if name == "probe_location":
+        return list(value)
+    return value
+
+
+def variant_axes(variants: list[HiddenVariant]) -> list[str]:
+    axes: list[str] = []
+    for variant in variants:
+        for axis in variant.changes:
+            if axis not in axes:
+                axes.append(axis)
+    return axes
+
+
+def select_hidden_variants(
+    grid: list[HiddenVariant],
+    *,
+    family: str,
+    seed: int,
+    index: int,
+    count: int = PRIVATE_VARIANTS_PER_TASK,
+) -> list[HiddenVariant]:
+    if not grid:
+        return []
+    selected_count = min(count, len(grid))
+    selector = stable_hash(
+        {
+            "family": family,
+            "seed": seed,
+            "index": index,
+            "axes": variant_axes(grid),
+            "grid_size": len(grid),
+        },
+        16,
+    )
+    order = sorted(
+        range(len(grid)),
+        key=lambda pos: stable_hash({"selector": selector, "position": pos}, 16),
+    )
+    return [
+        HiddenVariant(
+            name=f"private_variant_{slot + 1:02d}",
+            changes=grid[position].changes,
+            expected_overrides=grid[position].expected_overrides,
+        )
+        for slot, position in enumerate(order[:selected_count])
+    ]
 
 
 def family_definition(name: str, task_id: str) -> FamilyDefinition:

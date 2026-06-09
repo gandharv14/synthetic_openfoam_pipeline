@@ -8,7 +8,12 @@ from pathlib import Path
 from synthetic_openfoam_pipeline.agents.skill_mapper_agent import SkillMapperAgent
 from synthetic_openfoam_pipeline.openfoam.case_model import write_seed_case
 from synthetic_openfoam_pipeline.schemas import ForbiddenEdit, TaskCandidate
-from synthetic_openfoam_pipeline.task_families.common import apply_oracle_marker, apply_starter_perturbation
+from synthetic_openfoam_pipeline.task_families.common import (
+    apply_oracle_marker,
+    apply_starter_perturbation,
+    select_hidden_variants,
+    variant_axes,
+)
 from synthetic_openfoam_pipeline.utils.hashing import sha256_file, task_id_for
 
 
@@ -40,13 +45,15 @@ class PerturbationAgent:
             for edit in definition.task_spec.forbidden_edits
         ]
         expected = definition.expected_metrics
+        hidden_variants = select_hidden_variants(definition.task_spec.hidden_variant_grid, family=family, seed=seed, index=index)
+        hidden_variant_axes = variant_axes(definition.task_spec.hidden_variant_grid)
         candidate = TaskCandidate(
             task_id=task_id,
             family=family,
             seed=seed,
             seed_case=seed_spec,
             skill_graph=self.skills.map_skills(family),
-            hidden_variants=definition.hidden_variants,
+            hidden_variants=hidden_variants,
             expected_metrics=expected,
             forbidden_edits=forbidden,
             prompt=definition.prompt,
@@ -58,6 +65,9 @@ class PerturbationAgent:
                 "family_title": definition.title,
                 "symptom": definition.symptom,
                 "expected_metrics": asdict(expected),
+                "hidden_variant_axes": hidden_variant_axes,
+                "hidden_variant_count": len(hidden_variants),
+                "hidden_variant_grid_size": len(definition.task_spec.hidden_variant_grid),
                 "claude_hard_rationale": definition.rationale,
             },
         )

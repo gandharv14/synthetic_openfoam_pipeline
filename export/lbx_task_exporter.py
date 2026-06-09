@@ -72,6 +72,8 @@ class LbxTaskExporter:
             {
                 "task_id": candidate.task_id,
                 "public_note": "Repair the OpenFOAM case described in the instruction. Private validation variants and expected metrics are held by the scorer.",
+                "hidden_variant_axes": candidate.hidden_variant_axes,
+                "hidden_variant_count": len(candidate.hidden_variants),
             },
             allow_template_output=template_write_root,
         )
@@ -142,6 +144,8 @@ The agent must repair the public starter case from `data/starter_case.tar.gz` an
 write `/tmp/output/fixed_case.tar.gz`. The deterministic scorer applies hidden
 variants and checks OpenFOAM-style structure, forbidden edits, solver health, and
 engineering metrics.
+
+Hidden validation axes: {", ".join(candidate.hidden_variant_axes)}
 
 Claude-hard rationale: {candidate.rationale}
 """

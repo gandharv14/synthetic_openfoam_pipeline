@@ -45,6 +45,8 @@ class ReportWriter:
             lines.append(f"- Family: `{candidate.family}`")
             lines.append(f"- Status: `{candidate.status.value}`")
             lines.append(f"- Task dir: `{candidate.task_dir}`")
+            lines.append(f"- Hidden variant axes: `{', '.join(candidate.hidden_variant_axes)}`")
+            lines.append(f"- Hidden private variants: `{len(candidate.hidden_variants)}`")
             if candidate.zip_path:
                 lines.append(f"- Zip: `{candidate.zip_path}`")
             if validation:
