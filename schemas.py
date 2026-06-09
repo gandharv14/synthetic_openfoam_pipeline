@@ -59,6 +59,44 @@ class ForbiddenEdit:
     description: str
 
 
+@dataclass(frozen=True)
+class DictionaryEditSpec:
+    path: str
+    old: str
+    new: str
+    description: str
+    mode: str = "replace"
+
+
+@dataclass(frozen=True)
+class CorruptionSpec:
+    steps: list[DictionaryEditSpec]
+    description: str
+
+
+@dataclass(frozen=True)
+class OracleRepairSpec:
+    steps: list[DictionaryEditSpec]
+    description: str
+
+
+@dataclass(frozen=True)
+class ForbiddenEditSpec:
+    path: str
+    description: str = "Must preserve physical input"
+
+
+@dataclass(frozen=True)
+class OpenFoamTaskSpec:
+    family: str
+    seed_case: SeedCaseSpec
+    corruption: CorruptionSpec
+    oracle_repair: OracleRepairSpec
+    hidden_variant_grid: list[HiddenVariant]
+    expected_metrics: ExpectedMetrics
+    forbidden_edits: list[ForbiddenEditSpec]
+
+
 @dataclass
 class TaskCandidate:
     task_id: str
@@ -77,6 +115,7 @@ class TaskCandidate:
     task_dir: Path | None = None
     zip_path: Path | None = None
     generation_report: dict[str, Any] = field(default_factory=dict)
+    task_spec: OpenFoamTaskSpec | None = None
 
     def to_manifest(self) -> dict[str, Any]:
         data = {
