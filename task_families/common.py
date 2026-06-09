@@ -113,7 +113,7 @@ def select_hidden_variants(
     ]
 
 
-def family_definition(name: str, task_id: str) -> FamilyDefinition:
+def family_definition(name: str, task_id: str, seed_selector: Any = None) -> FamilyDefinition:
     _ = task_id
     common_forbidden = [_forbidden("constant/transportProperties")]
     if name == "boundary_condition_repair":
@@ -129,6 +129,7 @@ def family_definition(name: str, task_id: str) -> FamilyDefinition:
             forbidden_edits=common_forbidden,
             prompt=_prompt(name, "repair the pressure/velocity boundary-condition consistency without changing viscosity"),
             rationale="Likely Claude-hard because the visible symptom can be patched several ways, but hidden flow reversal and viscosity variants require multi-file OpenFOAM BC consistency rather than a single text edit.",
+            seed_selector=seed_selector,
         )
     if name == "postprocessing_instrumentation":
         corruption = _edit("system/controlDict", "functions\n{", "functions {}\n", "remove deterministic function objects", mode="replace_tail")
@@ -143,6 +144,7 @@ def family_definition(name: str, task_id: str) -> FamilyDefinition:
             forbidden_edits=common_forbidden + [_forbidden("0/U"), _forbidden("0/p")],
             prompt=_prompt(name, "instrument the case with deterministic function objects while preserving the physics"),
             rationale="Likely Claude-hard because the prompt asks for evidence generation, not a named function-object list, and hidden probes/write intervals reject brittle one-point instrumentation.",
+            seed_selector=seed_selector,
         )
     if name == "solver_convergence_repair":
         corruption = _edit("system/fvSchemes", "div(phi,U) Gauss linearUpwind grad(U);", "div(phi,U) Gauss linear;", "destabilize convection scheme")
@@ -157,6 +159,7 @@ def family_definition(name: str, task_id: str) -> FamilyDefinition:
             forbidden_edits=common_forbidden + [_forbidden("0/U")],
             prompt=_prompt(name, "repair numerics and relaxation so the case converges without changing physical inputs"),
             rationale="Likely Claude-hard because stable OpenFOAM convergence requires coordinated fvSchemes/fvSolution choices, while hidden Reynolds variants expose overfit tolerances.",
+            seed_selector=seed_selector,
         )
     if name == "mesh_quality_repair":
         corruption = _edit("system/blockMeshDict", "simpleGrading (1.5 1 1)", "simpleGrading (20 1 1)", "introduce excessive block grading")
@@ -171,6 +174,7 @@ def family_definition(name: str, task_id: str) -> FamilyDefinition:
             forbidden_edits=common_forbidden + [_forbidden("0/U"), _forbidden("0/p")],
             prompt=_prompt(name, "fix mesh quality while keeping the same topology and comparable cell count"),
             rationale="Likely Claude-hard because the repair must improve mesh quality without rewriting topology or changing physics; hidden grading checks punish broad rewrites.",
+            seed_selector=seed_selector,
         )
     if name == "source_term_calibration":
         corruption = _edit("constant/fvOptions", "U ((0.200 0 0) 0);", "U ((0.000 0 0) 0);", "zero out calibrated source term")
@@ -185,6 +189,98 @@ def family_definition(name: str, task_id: str) -> FamilyDefinition:
             forbidden_edits=common_forbidden + [_forbidden("system/blockMeshDict")],
             prompt=_prompt(name, "calibrate the source behavior to hit the engineering target across hidden variants"),
             rationale="Likely Claude-hard because direct metric spoofing is rejected and the correction must generalize to hidden source-strength and viscosity variants.",
+            seed_selector=seed_selector,
+        )
+    if name == "flow_rate_targeting":
+        corruption = _edit("0/U", "inlet { type fixedValue; value uniform (1 0 0); }", "inlet { type fixedValue; value uniform (0.35 0 0); }", "miscalibrate inlet flow target")
+        return _family(
+            name=name,
+            title="Flow-rate targeting",
+            symptom="The case is stable but the inlet flow target is set far below the documented operating point.",
+            corruption=[corruption],
+            oracle_repair=[_reverse(corruption, "restore target inlet flow")],
+            hidden_variant_grid=_variants("inlet_velocity", "viscosity"),
+            expected_metrics=ExpectedMetrics(postprocessing_required=["residuals", "probes"]),
+            forbidden_edits=common_forbidden + [_forbidden("system/blockMeshDict"), _forbidden("0/p")],
+            prompt=_prompt(name, "restore the deterministic inlet flow target without changing viscosity, mesh topology, or outlet pressure anchoring"),
+            rationale="Likely Claude-hard because the visible case runs, but hidden inlet-speed and viscosity variants require preserving the intended flow-control boundary rather than compensating elsewhere.",
+            seed_selector=seed_selector,
+        )
+    if name == "pressure_drop_calibration":
+        corruption = _edit("0/p", "outlet { type fixedValue; value uniform 0; }", "outlet { type fixedValue; value uniform 2; }", "shift outlet reference pressure")
+        return _family(
+            name=name,
+            title="Pressure-drop calibration",
+            symptom="The channel reports a biased pressure drop because the outlet pressure datum was shifted.",
+            corruption=[corruption],
+            oracle_repair=[_reverse(corruption, "restore zero outlet pressure datum")],
+            hidden_variant_grid=_variants("inlet_velocity", "viscosity"),
+            expected_metrics=ExpectedMetrics(pressure_drop_min=0.05, pressure_drop_max=5.0, postprocessing_required=["residuals", "probes"]),
+            forbidden_edits=common_forbidden + [_forbidden("0/U"), _forbidden("system/blockMeshDict")],
+            prompt=_prompt(name, "recalibrate the pressure-drop datum while preserving the physical inlet velocity and mesh"),
+            rationale="Likely Claude-hard because the solver can still converge with a shifted datum, but hidden pressure-drop checks require the exact reference-pressure convention.",
+            seed_selector=seed_selector,
+        )
+    if name == "transient_setup_repair":
+        end_time = _edit("system/controlDict", "endTime 100;", "endTime 10;", "truncate deterministic run horizon")
+        write_interval = _edit("system/controlDict", "writeInterval 20;", "writeInterval 100;", "hide useful time history output")
+        return _family(
+            name=name,
+            title="Transient setup repair",
+            symptom="The run-control dictionary stops too early and writes too sparsely for deterministic validation.",
+            corruption=[end_time, write_interval],
+            oracle_repair=[_reverse(end_time, "restore full run horizon"), _reverse(write_interval, "restore useful output cadence")],
+            hidden_variant_grid=_variants("write_interval", "inlet_velocity"),
+            expected_metrics=ExpectedMetrics(postprocessing_required=["residuals"]),
+            forbidden_edits=common_forbidden + [_forbidden("0/U"), _forbidden("0/p"), _forbidden("system/blockMeshDict")],
+            prompt=_prompt(name, "repair the run-control setup so the case reaches the intended deterministic horizon and output cadence"),
+            rationale="Likely Claude-hard because the correction is in run-control semantics rather than solver physics, and hidden write-cadence variants reject one-off timing edits.",
+            seed_selector=seed_selector,
+        )
+    if name == "force_coeff_instrumentation":
+        corruption = _edit("system/controlDict", "functions\n{", "functions {}\n", "remove force-coefficient instrumentation", mode="replace_tail")
+        return _family(
+            name=name,
+            title="Force-coefficient instrumentation",
+            symptom="The case solves but lacks deterministic force-coefficient outputs needed for review.",
+            corruption=[corruption],
+            oracle_repair=[_edit("system/controlDict", "functions {}", _force_function_objects(), "restore deterministic force-coefficient function objects")],
+            hidden_variant_grid=_variants("write_interval", "probe_location"),
+            expected_metrics=ExpectedMetrics(postprocessing_required=["residuals", "probes", "fieldMinMax", "forceCoeffs"]),
+            forbidden_edits=common_forbidden + [_forbidden("0/U"), _forbidden("0/p"), _forbidden("system/blockMeshDict")],
+            prompt=_prompt(name, "instrument deterministic force coefficients while preserving the flow setup and mesh"),
+            rationale="Likely Claude-hard because successful repair requires valid OpenFOAM function-object syntax, not just adding comments or post-hoc metric files.",
+            seed_selector=seed_selector,
+        )
+    if name == "scalar_transport_repair":
+        corruption = _edit("0/T", "movingWall { type fixedValue; value uniform 310; }", "movingWall { type zeroGradient; }", "remove heated-wall scalar boundary")
+        return _family(
+            name=name,
+            title="Scalar-transport repair",
+            symptom="The thermal scalar field is present, but the heated-wall boundary was replaced with an unconstrained gradient.",
+            corruption=[corruption],
+            oracle_repair=[_reverse(corruption, "restore heated-wall scalar value")],
+            hidden_variant_grid=_variants("viscosity", "write_interval"),
+            expected_metrics=ExpectedMetrics(postprocessing_required=["residuals", "fieldMinMax"]),
+            forbidden_edits=common_forbidden + [_forbidden("0/U"), _forbidden("0/p"), _forbidden("system/blockMeshDict")],
+            prompt=_prompt(name, "repair the scalar boundary condition without changing the velocity, pressure, or mesh setup"),
+            rationale="Likely Claude-hard because the scalar field is ancillary to the simple flow solve, so hidden checks focus on preserving the exact thermal boundary intent.",
+            seed_selector=seed_selector,
+        )
+    if name == "mesh_resolution_tradeoff":
+        corruption = _edit("system/blockMeshDict", "(20 10 1) simpleGrading (1.5 1 1)", "(80 40 1) simpleGrading (1.5 1 1)", "inflate mesh beyond the low-cost validation budget")
+        return _family(
+            name=name,
+            title="Mesh-resolution tradeoff",
+            symptom="The mesh was over-refined beyond the low-cost validation budget without improving topology.",
+            corruption=[corruption],
+            oracle_repair=[_reverse(corruption, "restore compact validation mesh")],
+            hidden_variant_grid=_variants("mesh_grading", "inlet_velocity"),
+            expected_metrics=ExpectedMetrics(postprocessing_required=["checkMesh"]),
+            forbidden_edits=common_forbidden + [_forbidden("0/U"), _forbidden("0/p")],
+            prompt=_prompt(name, "restore a compact mesh resolution that keeps topology and grading intent while meeting validation cost constraints"),
+            rationale="Likely Claude-hard because the case remains valid when over-refined, but hidden cost and grading checks require the intended compact resolution.",
+            seed_selector=seed_selector,
         )
     raise ValueError(f"Unknown task family: {name}")
 
@@ -201,10 +297,11 @@ def _family(
     forbidden_edits: list[ForbiddenEditSpec],
     prompt: str,
     rationale: str,
+    seed_selector: Any = None,
 ) -> FamilyDefinition:
     task_spec = OpenFoamTaskSpec(
         family=name,
-        seed_case=pick_seed_for_family(name),
+        seed_case=pick_seed_for_family(name, seed_selector),
         corruption=CorruptionSpec(corruption, "Public starter-case perturbations"),
         oracle_repair=OracleRepairSpec(oracle_repair, "Minimal repair expected from the oracle solution"),
         hidden_variant_grid=hidden_variant_grid,
@@ -260,6 +357,55 @@ def _function_objects() -> str:
         writeControl timeStep;
         writeInterval 1;
         fields (p U);
+    }
+}
+"""
+
+
+def _force_function_objects() -> str:
+    return """functions
+{
+    residuals
+    {
+        type residuals;
+        libs ("libutilityFunctionObjects.so");
+        writeControl timeStep;
+        writeInterval 1;
+        fields (p U);
+    }
+    probes
+    {
+        type probes;
+        libs ("libsampling.so");
+        writeControl timeStep;
+        writeInterval 1;
+        fields (p U);
+        probeLocations ((1 0.5 0.05));
+    }
+    fieldMinMax
+    {
+        type fieldMinMax;
+        libs ("libfieldFunctionObjects.so");
+        writeControl timeStep;
+        writeInterval 1;
+        fields (p U);
+    }
+    forceCoeffs
+    {
+        type forceCoeffs;
+        libs ("libforces.so");
+        writeControl timeStep;
+        writeInterval 1;
+        patches (walls);
+        rho rhoInf;
+        rhoInf 1;
+        CofR (0 0 0);
+        liftDir (0 1 0);
+        dragDir (1 0 0);
+        pitchAxis (0 0 1);
+        magUInf 1;
+        lRef 1;
+        Aref 1;
     }
 }
 """

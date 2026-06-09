@@ -12,6 +12,12 @@ DEFAULT_FAMILIES = [
     "solver_convergence_repair",
     "mesh_quality_repair",
     "source_term_calibration",
+    "flow_rate_targeting",
+    "pressure_drop_calibration",
+    "transient_setup_repair",
+    "force_coeff_instrumentation",
+    "scalar_transport_repair",
+    "mesh_resolution_tradeoff",
 ]
 
 

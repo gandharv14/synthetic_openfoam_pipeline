@@ -23,7 +23,8 @@ class PerturbationAgent:
 
     def generate_candidate(self, *, family: str, seed: int, index: int, work_root: Path) -> TaskCandidate:
         module = importlib.import_module(f"synthetic_openfoam_pipeline.task_families.{family}")
-        definition = module.build("")
+        seed_selector = {"seed": seed, "index": index}
+        definition = module.build("", seed_selector=seed_selector)
         seed_spec = definition.task_spec.seed_case
         task_id = task_id_for(seed, family, seed_spec.case_kind, index)
 

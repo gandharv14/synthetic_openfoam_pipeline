@@ -134,6 +134,52 @@ def solution_script(task_id: str, family: str, marker: dict) -> str:
             }}
         }}
         '''
+        FORCE_FUNCTIONS = '''functions
+        {{
+            residuals
+            {{
+                type residuals;
+                libs ("libutilityFunctionObjects.so");
+                writeControl timeStep;
+                writeInterval 1;
+                fields (p U);
+            }}
+            probes
+            {{
+                type probes;
+                libs ("libsampling.so");
+                writeControl timeStep;
+                writeInterval 1;
+                fields (p U);
+                probeLocations ((1 0.5 0.05));
+            }}
+            fieldMinMax
+            {{
+                type fieldMinMax;
+                libs ("libfieldFunctionObjects.so");
+                writeControl timeStep;
+                writeInterval 1;
+                fields (p U);
+            }}
+            forceCoeffs
+            {{
+                type forceCoeffs;
+                libs ("libforces.so");
+                writeControl timeStep;
+                writeInterval 1;
+                patches (walls);
+                rho rhoInf;
+                rhoInf 1;
+                CofR (0 0 0);
+                liftDir (0 1 0);
+                dragDir (1 0 0);
+                pitchAxis (0 0 1);
+                magUInf 1;
+                lRef 1;
+                Aref 1;
+            }}
+        }}
+        '''
 
         def replace(path: Path, old: str, new: str) -> None:
             text = path.read_text()
@@ -152,6 +198,19 @@ def solution_script(task_id: str, family: str, marker: dict) -> str:
             replace(case / "system" / "blockMeshDict", "simpleGrading (20 1 1)", "simpleGrading (1.5 1 1)")
         elif family == "source_term_calibration":
             replace(case / "constant" / "fvOptions", "U ((0.000 0 0) 0);", "U ((0.200 0 0) 0);")
+        elif family == "flow_rate_targeting":
+            replace(case / "0" / "U", "inlet {{ type fixedValue; value uniform (0.35 0 0); }}", "inlet {{ type fixedValue; value uniform (1 0 0); }}")
+        elif family == "pressure_drop_calibration":
+            replace(case / "0" / "p", "outlet {{ type fixedValue; value uniform 2; }}", "outlet {{ type fixedValue; value uniform 0; }}")
+        elif family == "transient_setup_repair":
+            replace(case / "system" / "controlDict", "endTime 10;", "endTime 100;")
+            replace(case / "system" / "controlDict", "writeInterval 100;", "writeInterval 20;")
+        elif family == "force_coeff_instrumentation":
+            replace(case / "system" / "controlDict", "functions {{}}", FORCE_FUNCTIONS)
+        elif family == "scalar_transport_repair":
+            replace(case / "0" / "T", "movingWall {{ type zeroGradient; }}", "movingWall {{ type fixedValue; value uniform 310; }}")
+        elif family == "mesh_resolution_tradeoff":
+            replace(case / "system" / "blockMeshDict", "(80 40 1) simpleGrading (1.5 1 1)", "(20 10 1) simpleGrading (1.5 1 1)")
         else:
             raise SystemExit(f"unknown family: {{family}}")
         PY
@@ -252,7 +311,7 @@ class RunnerResult:
     post_ok: bool
     metrics_ok: bool
     no_numerical_errors: bool
-    metrics: dict[str, float]
+    metrics: dict[str, Any]
     reason: str = ""
 
 
@@ -377,6 +436,31 @@ def family_repair_ok(case_dir: Path, family: str, expected: dict[str, Any]) -> t
         tol = float(expected.get("tolerance") or 0.05)
         ok = value is not None and abs(value - target) <= tol
         return ok, {"source_strength": value, "target": target, "tolerance": tol}
+    if family == "flow_rate_targeting":
+        u = read_text(case_dir / "0" / "U")
+        ok = bool(re.search(r"inlet\s*\{[^}]*type\s+fixedValue;[^}]*value\s+uniform\s+\(1\s+0\s+0\);", u, re.S))
+        return ok, {"target_inlet_velocity": ok}
+    if family == "pressure_drop_calibration":
+        p = read_text(case_dir / "0" / "p")
+        ok = bool(re.search(r"outlet\s*\{[^}]*type\s+fixedValue;[^}]*value\s+uniform\s+0;", p, re.S))
+        return ok, {"zero_outlet_pressure_datum": ok}
+    if family == "transient_setup_repair":
+        control = read_text(case_dir / "system" / "controlDict")
+        end_ok = bool(re.search(r"\bendTime\s+100;", control))
+        write_ok = bool(re.search(r"\bwriteInterval\s+20;", control))
+        return end_ok and write_ok, {"end_time_100": end_ok, "write_interval_20": write_ok}
+    if family == "force_coeff_instrumentation":
+        control = read_text(case_dir / "system" / "controlDict")
+        present = {name: bool(re.search(rf"\b{name}\b", control)) for name in ["residuals", "probes", "fieldMinMax", "forceCoeffs"]}
+        return all(present.values()), present
+    if family == "scalar_transport_repair":
+        t = read_text(case_dir / "0" / "T")
+        ok = bool(re.search(r"movingWall\s*\{[^}]*type\s+fixedValue;[^}]*value\s+uniform\s+310;", t, re.S))
+        return ok, {"heated_wall_temperature_fixed": ok}
+    if family == "mesh_resolution_tradeoff":
+        mesh = read_text(case_dir / "system" / "blockMeshDict")
+        ok = "(20 10 1) simpleGrading (1.5 1 1)" in mesh and "(80 40 1)" not in mesh
+        return ok, {"compact_cell_count": ok}
     return False, {"unknown_family": family}
 
 
@@ -390,19 +474,276 @@ def residual_max(log: str) -> float | None:
     return max(values) if values else None
 
 
+def residual_window(log: str, limit: int = 20) -> dict[str, float]:
+    values = [float(v) for v in re.findall(r"Final residual =\s*([-+0-9.eE]+)", log)]
+    window = values[-limit:]
+    return {
+        "count": float(len(window)),
+        "max": max(window) if window else -1.0,
+        "last": window[-1] if window else -1.0,
+    }
+
+
 def continuity_max(log: str) -> float | None:
     values = [float(v) for v in re.findall(r"(?:global|local) =\s*([-+0-9.eE]+)", log)]
     return max(abs(v) for v in values) if values else None
 
 
-def post_outputs_ok(case_dir: Path, family: str) -> bool:
+def continuity_window(log: str, limit: int = 20) -> dict[str, float]:
+    values = [abs(float(v)) for v in re.findall(r"(?:global|local) =\s*([-+0-9.eE]+)", log)]
+    window = values[-limit:]
+    return {
+        "count": float(len(window)),
+        "max": max(window) if window else -1.0,
+        "last": window[-1] if window else -1.0,
+    }
+
+
+def numeric_values(text: str) -> list[float]:
+    return [float(v) for v in re.findall(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?", text)]
+
+
+def latest_time_dir(case_dir: Path) -> Path | None:
+    times: list[tuple[float, Path]] = []
+    for path in case_dir.iterdir() if case_dir.exists() else []:
+        if not path.is_dir():
+            continue
+        try:
+            value = float(path.name)
+        except ValueError:
+            continue
+        if value > 0:
+            times.append((value, path))
+    return max(times, default=(0.0, None))[1]
+
+
+def _parse_foam_value(raw: str) -> list[float]:
+    raw = raw.strip()
+    if raw.startswith("(") and raw.endswith(")"):
+        return numeric_values(raw)
+    try:
+        return [float(raw)]
+    except ValueError:
+        return []
+
+
+def field_numeric_values(path: Path) -> list[float]:
+    text = read_text(path)
+    values: list[float] = []
+    for match in re.finditer(r"(?:internalField|value)\s+uniform\s+(\([^;]+\)|[-+0-9.eE]+)\s*;", text):
+        values.extend(_parse_foam_value(match.group(1)))
+    for match in re.finditer(r"(?:internalField|value)\s+nonuniform[^{;]*\((.*?)\)\s*;", text, flags=re.S):
+        values.extend(numeric_values(match.group(1)))
+    return values
+
+
+def latest_field_values(case_dir: Path, field: str) -> list[float]:
+    latest = latest_time_dir(case_dir)
+    if latest is not None and (latest / field).exists():
+        values = field_numeric_values(latest / field)
+        if values:
+            return values
+    return field_numeric_values(case_dir / "0" / field)
+
+
+def table_rows(path: Path) -> list[list[float]]:
+    rows: list[list[float]] = []
+    for line in read_text(path).splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        values = numeric_values(stripped)
+        if values:
+            rows.append(values)
+    return rows
+
+
+def post_files(case_dir: Path, name: str) -> list[Path]:
     post = case_dir / "postProcessing"
-    if family == "postprocessing_instrumentation":
-        control = read_text(case_dir / "system" / "controlDict")
-        return all(name in control for name in ["residuals", "probes", "fieldMinMax"])
-    if family == "source_term_calibration":
-        return "fieldAverage" in read_text(case_dir / "system" / "controlDict")
-    return True
+    if not post.exists():
+        return []
+    return sorted(path for path in post.rglob("*") if path.is_file() and name.lower() in path.as_posix().lower())
+
+
+def post_output_present(case_dir: Path, name: str) -> bool:
+    aliases = {
+        "residuals": ("residual",),
+        "probes": ("probes", "probe"),
+        "fieldMinMax": ("fieldminmax", "fieldMinMax"),
+        "fieldAverage": ("fieldaverage", "fieldAverage"),
+        "forceCoeffs": ("forcecoeffs", "forceCoeffs"),
+    }
+    wanted = aliases.get(name, (name,))
+    return any(post_files(case_dir, item) for item in wanted)
+
+
+def post_last_values(case_dir: Path, name: str) -> list[float]:
+    rows: list[list[float]] = []
+    for path in post_files(case_dir, name):
+        rows.extend(table_rows(path))
+    if not rows:
+        return []
+    # Exclude the first column, which is normally time.
+    return rows[-1][1:] if len(rows[-1]) > 1 else rows[-1]
+
+
+def post_pressure_drop(case_dir: Path) -> float | None:
+    values = post_last_values(case_dir, "probes")
+    if len(values) >= 2:
+        return max(values) - min(values)
+    p_values = latest_field_values(case_dir, "p")
+    if len(p_values) >= 2:
+        return max(p_values) - min(p_values)
+    return None
+
+
+def field_average_value(case_dir: Path, field: str) -> float | None:
+    for key in ("fieldAverage", field):
+        values = post_last_values(case_dir, key)
+        if values:
+            return values[0]
+    values = latest_field_values(case_dir, field)
+    return sum(values) / len(values) if values else None
+
+
+def force_coefficients(case_dir: Path) -> dict[str, float]:
+    for path in post_files(case_dir, "force"):
+        rows = table_rows(path)
+        if not rows:
+            continue
+        header = ""
+        for line in read_text(path).splitlines():
+            if line.strip().startswith("#"):
+                header = line.strip("# \n")
+        values = rows[-1]
+        tokens = header.split()
+        result: dict[str, float] = {}
+        for name in ("Cd", "Cl"):
+            if name in tokens:
+                pos = tokens.index(name)
+                if pos < len(values):
+                    result[name] = values[pos]
+        if "Cd" not in result and len(values) >= 3:
+            result["Cd"] = values[2]
+        if "Cl" not in result and len(values) >= 4:
+            result["Cl"] = values[3]
+        if result:
+            return result
+    return {}
+
+
+def inlet_velocity(case_dir: Path) -> float | None:
+    u = read_text(case_dir / "0" / "U")
+    match = re.search(r"inlet\s*\{[^}]*value\s+uniform\s+\(([-+0-9.eE]+)", u, re.S)
+    if match:
+        return float(match.group(1))
+    values = latest_field_values(case_dir, "U")
+    return values[0] if values else None
+
+
+def block_mesh_cells(case_dir: Path) -> int | None:
+    mesh = read_text(case_dir / "system" / "blockMeshDict")
+    total = 0
+    for nx, ny, nz in re.findall(r"\(\s*(\d+)\s+(\d+)\s+(\d+)\s*\)\s+simpleGrading", mesh):
+        total += int(nx) * int(ny) * int(nz)
+    return total or None
+
+
+def inlet_patch_area(case_dir: Path) -> float:
+    mesh = read_text(case_dir / "system" / "blockMeshDict")
+    vertices_match = re.search(r"vertices\s*\((.*?)\);\s*blocks", mesh, re.S)
+    inlet_match = re.search(r"inlet\s*\{[^}]*faces\s*\((.*?)\);\s*\}", mesh, re.S)
+    if not vertices_match or not inlet_match:
+        return 0.1
+    coords = re.findall(r"\(([-+0-9.eE]+)\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)\)", vertices_match.group(1))
+    vertices = [(float(x), float(y), float(z)) for x, y, z in coords]
+    area = 0.0
+    for face in re.findall(r"\(([\d\s]+)\)", inlet_match.group(1)):
+        indices = [int(i) for i in face.split()]
+        pts = [vertices[i] for i in indices if i < len(vertices)]
+        if len(pts) < 3:
+            continue
+        ys = [p[1] for p in pts]
+        zs = [p[2] for p in pts]
+        area += max(max(ys) - min(ys), 0.0) * max(max(zs) - min(zs), 0.0)
+    return area or 0.1
+
+
+def post_outputs_ok(case_dir: Path, family: str, expected: dict[str, Any]) -> bool:
+    required = list(expected.get("postprocessing_required") or [])
+    if family == "force_coeff_instrumentation" and "forceCoeffs" not in required:
+        required.append("forceCoeffs")
+    if family == "source_term_calibration" and "fieldAverage" not in required:
+        required.append("fieldAverage")
+    material = [name for name in required if name not in {"checkMesh", "fluxBalance"}]
+    return all(post_output_present(case_dir, name) for name in material)
+
+
+def physical_metrics_ok(case_dir: Path, expected: dict[str, Any], family: str, log: str, variant: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
+    residual = residual_max(log)
+    continuity = continuity_max(log)
+    residual_limit = float(expected.get("residual_max") or 1e-4)
+    mass_limit = float(expected.get("mass_balance_max") or 2e-3)
+    residual_ok = residual is None or residual <= residual_limit * 10
+    continuity_ok = continuity is None or continuity <= mass_limit * 10
+    metrics: dict[str, Any] = {
+        "residual": residual if residual is not None else -1.0,
+        "residual_window": residual_window(log),
+        "mass_balance": continuity if continuity is not None else -1.0,
+        "continuity_window": continuity_window(log),
+        "source_strength": source_strength(case_dir) if source_strength(case_dir) is not None else -1.0,
+        "mesh_grading": mesh_grading(case_dir) if mesh_grading(case_dir) is not None else -1.0,
+        "mesh_cells": block_mesh_cells(case_dir) if block_mesh_cells(case_dir) is not None else -1,
+    }
+    checks = [residual_ok, continuity_ok]
+
+    if family == "flow_rate_targeting":
+        velocity = inlet_velocity(case_dir)
+        area = inlet_patch_area(case_dir)
+        target_velocity = float(variant.get("changes", {}).get("inlet_velocity", velocity if velocity is not None else 1.0))
+        flow = velocity * area if velocity is not None else None
+        target_flow = target_velocity * area
+        tol = max(float(expected.get("tolerance") or 0.05), 0.05) * max(abs(target_flow), 1e-9)
+        metrics.update({"flow_rate": flow if flow is not None else -1.0, "target_flow_rate": target_flow, "inlet_area": area})
+        checks.append(flow is not None and abs(flow - target_flow) <= tol)
+    elif family == "pressure_drop_calibration":
+        pressure_drop = post_pressure_drop(case_dir)
+        metrics["pressure_drop"] = pressure_drop if pressure_drop is not None else -1.0
+        checks.append(
+            pressure_drop is not None
+            and float(expected.get("pressure_drop_min") or 0.0) <= pressure_drop <= float(expected.get("pressure_drop_max") or 1e9)
+        )
+    elif family == "source_term_calibration":
+        value = source_strength(case_dir)
+        response = field_average_value(case_dir, "U")
+        target = float(expected.get("source_target") or 0.2)
+        tol = float(expected.get("tolerance") or 0.05)
+        metrics.update({"source_response": response if response is not None else -1.0, "source_target": target})
+        checks.append(value is not None and abs(value - target) <= tol)
+        if response is not None:
+            checks.append(response >= 0.0)
+    elif family == "force_coeff_instrumentation":
+        coeffs = force_coefficients(case_dir)
+        metrics.update({"force_Cd": coeffs.get("Cd", -1.0), "force_Cl": coeffs.get("Cl", -1.0)})
+        checks.append("Cd" in coeffs and "Cl" in coeffs)
+    elif family == "scalar_transport_repair":
+        values = latest_field_values(case_dir, "T")
+        avg = field_average_value(case_dir, "T")
+        scalar_min = min(values) if values else avg
+        scalar_max = max(values) if values else avg
+        metrics.update({
+            "scalar_average": avg if avg is not None else -1.0,
+            "scalar_min": scalar_min if scalar_min is not None else -1.0,
+            "scalar_max": scalar_max if scalar_max is not None else -1.0,
+        })
+        checks.append(scalar_min is not None and scalar_max is not None and 250 <= scalar_min <= scalar_max <= 400)
+    elif family in {"mesh_resolution_tradeoff", "mesh_quality_repair"}:
+        cells = block_mesh_cells(case_dir)
+        grading = mesh_grading(case_dir)
+        checks.append(cells is not None and cells <= int(expected.get("max_cells", 1000)))
+        checks.append(grading is not None and grading <= 2.0)
+
+    return all(checks), metrics
 
 
 def strip_function_objects_for_solver(case_dir: Path) -> None:
@@ -418,8 +759,6 @@ class RealOpenFoamRunner:
         env_snippet = "source /etc/solver-envs.d/openfoam.sh >/dev/null 2>&1"
         solver = application(case_dir)
         family = str(expected.get("family", ""))
-        post_ok = post_outputs_ok(case_dir, family)
-        strip_function_objects_for_solver(case_dir)
         cmds = [
             ("blockMesh", f"{env_snippet} && blockMesh -case {case_dir}"),
             ("checkMesh", f"{env_snippet} && checkMesh -case {case_dir}"),
@@ -445,17 +784,8 @@ class RealOpenFoamRunner:
         joined = "\n".join(logs)
         lowered = joined.lower().replace("floating point exception trapping enabled", "")
         bad = any(token in lowered for token in ["nan", "floating point exception", "fatal error", "diverg"])
-        residual = residual_max(joined)
-        continuity = continuity_max(joined)
-        residual_limit = float(expected.get("residual_max") or 1e-4)
-        mass_limit = float(expected.get("mass_balance_max") or 2e-3)
-        metrics_ok = (residual is None or residual <= residual_limit * 10) and (continuity is None or continuity <= mass_limit * 10)
-        metrics = {
-            "residual": residual if residual is not None else -1.0,
-            "mass_balance": continuity if continuity is not None else -1.0,
-            "source_strength": source_strength(case_dir) if source_strength(case_dir) is not None else -1.0,
-            "mesh_grading": mesh_grading(case_dir) if mesh_grading(case_dir) is not None else -1.0,
-        }
+        post_ok = post_outputs_ok(case_dir, family, expected)
+        metrics_ok, metrics = physical_metrics_ok(case_dir, expected, family, joined, variant)
         return RunnerResult(not bad and mesh_ok and solver_ok and post_ok and metrics_ok, mesh_ok, solver_ok, post_ok, metrics_ok, not bad, metrics, "real-openfoam")
 
 
@@ -534,7 +864,9 @@ def compute_score(workspace: Path, trajectory: list[dict[str, Any]] | None, priv
             variant_case = tmp / "case"
             shutil.copytree(case_dir, variant_case)
             apply_hidden_variant(variant_case, variant)
-            run = runner.run(variant_case, expected, variant)
+            variant_expected = dict(expected)
+            variant_expected.update(variant.get("expected_overrides") or {})
+            run = runner.run(variant_case, variant_expected, variant)
             variant_results.append({
                 "name": variant.get("name"),
                 "ok": run.ok,
@@ -545,6 +877,7 @@ def compute_score(workspace: Path, trajectory: list[dict[str, Any]] | None, priv
                 "no_numerical_errors": run.no_numerical_errors,
                 "metrics": run.metrics,
                 "reason": run.reason,
+                "expected_overrides": variant.get("expected_overrides") or {},
             })
             all_mesh = all_mesh and run.mesh_ok
             all_solver = all_solver and run.solver_ok
