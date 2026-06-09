@@ -116,6 +116,7 @@ class TaskCandidate:
     zip_path: Path | None = None
     generation_report: dict[str, Any] = field(default_factory=dict)
     task_spec: OpenFoamTaskSpec | None = None
+    metric_anchors: dict[str, Any] = field(default_factory=dict)
 
     @property
     def hidden_variant_axes(self) -> list[str]:

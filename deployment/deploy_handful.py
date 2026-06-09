@@ -4,6 +4,7 @@ import shutil
 from dataclasses import dataclass
 
 from synthetic_openfoam_pipeline.agents.adversarial_filter_agent import AdversarialFilterAgent
+from synthetic_openfoam_pipeline.agents.anchor_precompute_agent import AnchorPrecomputeAgent
 from synthetic_openfoam_pipeline.agents.curator_agent import CuratorAgent
 from synthetic_openfoam_pipeline.agents.oracle_builder_agent import OracleBuilderAgent
 from synthetic_openfoam_pipeline.agents.perturbation_agent import PerturbationAgent
@@ -36,11 +37,13 @@ def generate_candidates(config: PipelineConfig) -> list[TaskCandidate]:
     ensure_dir(work_root, allow_template_output=config.allow_template_output)
     perturb = PerturbationAgent()
     oracle = OracleBuilderAgent()
+    anchors = AnchorPrecomputeAgent()
     prompt_writer = PromptWriterAgent(model=config.prompt_rewrite_model) if config.prompt_rewrite_enabled else None
     candidates: list[TaskCandidate] = []
     for i in range(config.count):
         family = config.families[i % len(config.families)]
         candidate = oracle.attach_oracle(perturb.generate_candidate(family=family, seed=config.seed, index=i, work_root=work_root))
+        anchors.attach_anchors(candidate)
         if prompt_writer is not None:
             rewrite = prompt_writer.rewrite(candidate)
             candidate.generation_report["original_prompt"] = candidate.prompt

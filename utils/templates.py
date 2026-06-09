@@ -679,6 +679,41 @@ def post_outputs_ok(case_dir: Path, family: str, expected: dict[str, Any]) -> bo
     return all(post_output_present(case_dir, name) for name in material)
 
 
+def anchor_metrics_ok(metrics: dict[str, Any], anchor: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
+    oracle = anchor.get("oracle") or {}
+    baseline = anchor.get("baseline") or {}
+    tolerances = anchor.get("tolerances") or {}
+    if not oracle:
+        return True, {"present": False}
+    comparisons: dict[str, Any] = {"present": True, "checked": {}, "baseline_delta": {}}
+    ok = True
+    for key, target in oracle.items():
+        if key not in metrics:
+            continue
+        observed = metrics[key]
+        if not isinstance(observed, (int, float)) or observed < 0:
+            continue
+        target_value = float(target)
+        tolerance = float(tolerances.get(key, 0.1))
+        allowed = tolerance if tolerance >= 1 else max(abs(target_value) * tolerance, 1e-12)
+        delta = abs(float(observed) - target_value)
+        passed = delta <= allowed
+        comparisons["checked"][key] = {
+            "observed": float(observed),
+            "target": target_value,
+            "delta": delta,
+            "allowed": allowed,
+            "passed": passed,
+        }
+        ok = ok and passed
+        if key in baseline and isinstance(baseline[key], (int, float)):
+            denominator = abs(float(baseline[key]) - target_value)
+            comparisons["baseline_delta"][key] = (delta / denominator) if denominator > 1e-12 else 0.0
+    if not comparisons["checked"]:
+        return False, comparisons
+    return ok, comparisons
+
+
 def physical_metrics_ok(case_dir: Path, expected: dict[str, Any], family: str, log: str, variant: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
     residual = residual_max(log)
     continuity = continuity_max(log)
@@ -743,6 +778,9 @@ def physical_metrics_ok(case_dir: Path, expected: dict[str, Any], family: str, l
         checks.append(cells is not None and cells <= int(expected.get("max_cells", 1000)))
         checks.append(grading is not None and grading <= 2.0)
 
+    anchor_ok, anchor_detail = anchor_metrics_ok(metrics, expected.get("metric_anchor") or {})
+    metrics["anchor_comparison"] = anchor_detail
+    checks.append(anchor_ok)
     return all(checks), metrics
 
 
@@ -839,6 +877,7 @@ def compute_score(workspace: Path, trajectory: list[dict[str, Any]] | None, priv
 
     hidden_variants = load_json(private / "hidden_variants.json", []) or []
     expected = load_json(private / "expected_metrics.json", {}) or {}
+    metric_anchors = load_json(private / "metric_anchors.json", {}) or {}
     forbidden = load_json(private / "forbidden_edits.json", []) or []
     family = str(expected.get("family", ""))
 
@@ -866,6 +905,9 @@ def compute_score(workspace: Path, trajectory: list[dict[str, Any]] | None, priv
             apply_hidden_variant(variant_case, variant)
             variant_expected = dict(expected)
             variant_expected.update(variant.get("expected_overrides") or {})
+            anchor = (metric_anchors.get("by_variant") or {}).get(str(variant.get("name")), {})
+            if anchor:
+                variant_expected["metric_anchor"] = anchor
             run = runner.run(variant_case, variant_expected, variant)
             variant_results.append({
                 "name": variant.get("name"),
@@ -878,6 +920,7 @@ def compute_score(workspace: Path, trajectory: list[dict[str, Any]] | None, priv
                 "metrics": run.metrics,
                 "reason": run.reason,
                 "expected_overrides": variant.get("expected_overrides") or {},
+                "metric_anchor_present": bool(anchor),
             })
             all_mesh = all_mesh and run.mesh_ok
             all_solver = all_solver and run.solver_ok

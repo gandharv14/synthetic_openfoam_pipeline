@@ -82,6 +82,11 @@ class LbxTaskExporter:
             [asdict(v) for v in candidate.hidden_variants],
             allow_template_output=template_write_root,
         )
+        write_json(
+            task_dir / "scorer" / "data" / "metric_anchors.json",
+            candidate.metric_anchors or {"version": 1, "by_variant": {}},
+            allow_template_output=template_write_root,
+        )
         expected = asdict(candidate.expected_metrics)
         expected["family"] = candidate.family
         write_json(
