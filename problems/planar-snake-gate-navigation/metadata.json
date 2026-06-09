@@ -1,7 +1,0 @@
-{
-  "benchmark": "taiga_task",
-  "problem_data": {
-    "instance_id": "planar-snake-gate-navigation",
-    "description": "Control an articulated planar MuJoCo snake through hidden gate sequences with no-go-region and whole-body safety constraints."
-  }
-}
