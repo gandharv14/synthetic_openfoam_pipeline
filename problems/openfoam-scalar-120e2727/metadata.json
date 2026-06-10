@@ -1,0 +1,7 @@
+{
+  "benchmark": "taiga_task",
+  "problem_data": {
+    "description": "The thermal scalar field is present, but the heated-wall boundary was replaced with an unconstrained gradient.",
+    "instance_id": "openfoam-scalar-120e2727"
+  }
+}

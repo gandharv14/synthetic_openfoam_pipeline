@@ -24,19 +24,9 @@ def stable_hash(data: Any, length: int = 10) -> str:
 
 
 def task_id_for(seed: int, family: str, case_kind: str, index: int) -> str:
-    short_names = {
-        "boundary_condition_repair": "bc-repair",
-        "postprocessing_instrumentation": "postproc",
-        "solver_convergence_repair": "converge",
-        "mesh_quality_repair": "mesh",
-        "source_term_calibration": "source",
-        "flow_rate_targeting": "flow-rate",
-        "pressure_drop_calibration": "pressure-drop",
-        "transient_setup_repair": "transient",
-        "force_coeff_instrumentation": "force-coeff",
-        "scalar_transport_repair": "scalar",
-        "mesh_resolution_tradeoff": "mesh-resolution",
-    }
-    digest = stable_hash({"seed": seed, "family": family, "case_kind": case_kind, "index": index}, 8)
-    return f"openfoam-{short_names.get(family, family.replace('_', '-'))}-{digest}"
+    # The public ID deliberately omits the family so the title cannot be
+    # pattern-matched to the repair; the digest still keys on family/seed/
+    # case-kind/index so IDs stay deterministic and unique.
+    digest = stable_hash({"seed": seed, "family": family, "case_kind": case_kind, "index": index}, 12)
+    return f"openfoam-case-{digest}"
 

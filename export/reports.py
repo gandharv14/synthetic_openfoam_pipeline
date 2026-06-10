@@ -49,9 +49,26 @@ class ReportWriter:
             lines.append(f"- Hidden private variants: `{len(candidate.hidden_variants)}`")
             if candidate.zip_path:
                 lines.append(f"- Zip: `{candidate.zip_path}`")
+            anchor_validation = (candidate.generation_report or {}).get("anchor_validation")
+            if anchor_validation is not None:
+                if anchor_validation.get("passed"):
+                    lines.append("- Anchor validation: `passed`")
+                else:
+                    failing = ", ".join(item.get("variant", "?") for item in anchor_validation.get("failing_variants", []))
+                    lines.append(f"- Anchor validation: `failed` (oracle metrics_ok false for: {failing})")
+                    if anchor_validation.get("reason"):
+                        lines.append(f"- Anchor validation reason: {anchor_validation['reason']}")
             if validation:
                 lines.append(f"- Oracle score: `{validation.oracle.score}`")
                 lines.append(f"- Naive score: `{validation.naive.score}`")
+                if validation.issues:
+                    lines.append(f"- Validation issues: `{'; '.join(validation.issues)}`")
+                combined_log = validation.oracle.details.get("combined_log") if validation.oracle.details else None
+                if combined_log:
+                    lines.append(f"- Oracle harness log: `{combined_log}`")
+                naive_log = validation.naive.details.get("combined_log") if validation.naive.details else None
+                if naive_log:
+                    lines.append(f"- Naive harness log: `{naive_log}`")
             if adv:
                 lines.append(f"- Adversarial target: `{adv.target}`")
                 lines.append(f"- Adversarial status: `{adv.status.value}`")

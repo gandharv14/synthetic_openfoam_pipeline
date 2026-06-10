@@ -1,0 +1,50 @@
+[
+  {
+    "changes": {
+      "probe_location": [
+        0.5,
+        0.25,
+        0.05
+      ],
+      "write_interval": 8
+    },
+    "expected_overrides": {},
+    "name": "private_variant_01"
+  },
+  {
+    "changes": {
+      "probe_location": [
+        1.6,
+        0.75,
+        0.05
+      ],
+      "write_interval": 5
+    },
+    "expected_overrides": {},
+    "name": "private_variant_02"
+  },
+  {
+    "changes": {
+      "probe_location": [
+        1.25,
+        0.5,
+        0.05
+      ],
+      "write_interval": 13
+    },
+    "expected_overrides": {},
+    "name": "private_variant_03"
+  },
+  {
+    "changes": {
+      "probe_location": [
+        0.75,
+        0.1,
+        0.0
+      ],
+      "write_interval": 13
+    },
+    "expected_overrides": {},
+    "name": "private_variant_04"
+  }
+]

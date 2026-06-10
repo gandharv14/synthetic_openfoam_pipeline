@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 import json
 import math
+import re
 import shutil
 import subprocess
 import tempfile
@@ -12,10 +13,16 @@ from typing import Callable, Iterable
 
 FAMILY_ORDER = [
     "boundary_condition_repair",
+    "postprocessing_instrumentation",
     "solver_convergence_repair",
     "mesh_quality_repair",
-    "postprocessing_instrumentation",
     "source_term_calibration",
+    "flow_rate_targeting",
+    "pressure_drop_calibration",
+    "transient_setup_repair",
+    "force_coeff_instrumentation",
+    "scalar_transport_repair",
+    "mesh_resolution_tradeoff",
 ]
 
 FAMILY_CAPTIONS = {
@@ -38,6 +45,30 @@ FAMILY_CAPTIONS = {
     "source_term_calibration": (
         "The scalar-channel animation shows source-region response moving into the target band, with the field "
         "average approaching the configured engineering target."
+    ),
+    "flow_rate_targeting": (
+        "The channel-flow visualization focuses on the inlet velocity target and the resulting bulk flow response "
+        "that hidden variants verify across operating points."
+    ),
+    "pressure_drop_calibration": (
+        "The pressure-drop visualization highlights the pressure datum repair and the channel-wise gradient used "
+        "for physical validation."
+    ),
+    "transient_setup_repair": (
+        "The transient visualization emphasizes the repaired run horizon and write cadence needed to expose a "
+        "deterministic time history."
+    ),
+    "force_coeff_instrumentation": (
+        "The force-coefficient visualization combines the solved flow context with the review evidence expected "
+        "from deterministic force-function objects."
+    ),
+    "scalar_transport_repair": (
+        "The scalar-transport visualization shows how the repaired thermal boundary condition constrains the "
+        "physical scalar field."
+    ),
+    "mesh_resolution_tradeoff": (
+        "The mesh-resolution visualization compares the over-refined starter grid with the compact validation mesh "
+        "that preserves topology while reducing cost."
     ),
 }
 
@@ -85,6 +116,9 @@ class ProblemRender:
     title: str
     path: Path
     caption: str
+    marker: str = "render"
+    label: str = "Problem visualization"
+    aria_label_suffix: str = "reviewer visualization"
 
 
 def discover_openfoam_tasks(tasks_root: Path) -> list[TaskRenderSpec]:
@@ -131,13 +165,18 @@ def render_all(
     task_ids: Iterable[str] | None = None,
     frames: int = 36,
     fps: int = 12,
+    skip_missing: bool = False,
 ) -> list[ProblemRender]:
     selected = set(task_ids or [])
     renders = []
     for spec in discover_openfoam_tasks(tasks_root):
         if selected and spec.task_id not in selected:
             continue
-        renders.append(render_problem(spec.task_dir, assets_dir, frames=frames, fps=fps))
+        try:
+            renders.append(render_problem(spec.task_dir, assets_dir, frames=frames, fps=fps))
+        except ValueError:
+            if not skip_missing:
+                raise
     return renders
 
 
@@ -204,16 +243,32 @@ def encode_frames(frames_dir: Path, output: Path, fps: int) -> None:
         raise RuntimeError(f"ffmpeg failed while writing {output}: {result.stderr[-800:]}")
 
 
-def update_report(report_path: Path, renders: Iterable[ProblemRender], assets_dir: Path) -> None:
+def update_report(
+    report_path: Path,
+    renders: Iterable[ProblemRender],
+    assets_dir: Path,
+    *,
+    tasks_root: Path | None = None,
+    ensure_cards: bool = False,
+    current_only: bool = False,
+) -> None:
     """Insert or refresh video blocks in the static HTML report."""
     report_path = Path(report_path)
     assets_dir = Path(assets_dir)
     text = report_path.read_text()
     text = ensure_render_css(text)
+    specs_by_id = {}
+    if tasks_root is not None:
+        specs_by_id = {spec.task_id: spec for spec in discover_openfoam_tasks(tasks_root)}
+    if current_only and specs_by_id:
+        text = current_only_report_shell(text, list(specs_by_id.values()))
     for render in renders:
+        spec = specs_by_id.get(render.task_id)
+        if ensure_cards and spec is not None:
+            text = ensure_report_card(text, spec)
         relative_video = relative_asset_path(report_path, render.path)
         block = render_block(render, relative_video)
-        text = replace_render_block(text, render.task_id, block)
+        text = replace_render_block(text, render.task_id, block, render.marker)
     report_path.write_text(text)
 
 
@@ -234,23 +289,26 @@ def render_block(render: ProblemRender, relative_video: str) -> str:
     title = html.escape(render.title)
     caption = html.escape(render.caption)
     src = html.escape(relative_video, quote=True)
-    return f"""          <!-- render:{render.task_id}:start -->
+    label = html.escape(render.label)
+    aria = html.escape(f"{render.title} {render.aria_label_suffix}", quote=True)
+    marker = html.escape(render.marker, quote=True)
+    return f"""          <!-- {marker}:{render.task_id}:start -->
           <section class="section full render-section">
-            <div class="label">Problem visualization</div>
+            <div class="label">{label}</div>
             <div class="render-panel">
-              <video controls preload="metadata" aria-label="{title} reviewer visualization">
+              <video controls preload="metadata" aria-label="{aria}">
                 <source src="{src}" type="video/mp4">
                 Your browser does not support embedded video.
               </video>
               <p class="render-caption">{caption}</p>
             </div>
           </section>
-          <!-- render:{render.task_id}:end -->
+          <!-- {marker}:{render.task_id}:end -->
 """
 
 
-def replace_render_block(text: str, task_id: str, block: str) -> str:
-    text = remove_existing_render_block(text, task_id)
+def replace_render_block(text: str, task_id: str, block: str, marker: str = "render") -> str:
+    text = remove_existing_render_block(text, task_id, marker)
     task_marker = f"<span class=\"badge blue\"><code>{task_id}</code></span>"
     marker_index = text.find(task_marker)
     if marker_index == -1:
@@ -267,9 +325,9 @@ def replace_render_block(text: str, task_id: str, block: str) -> str:
     return text[:insert_at] + block + text[insert_at:]
 
 
-def remove_existing_render_block(text: str, task_id: str) -> str:
-    start_marker = f"<!-- render:{task_id}:start -->"
-    end_marker = f"<!-- render:{task_id}:end -->"
+def remove_existing_render_block(text: str, task_id: str, marker: str = "render") -> str:
+    start_marker = f"<!-- {marker}:{task_id}:start -->"
+    end_marker = f"<!-- {marker}:{task_id}:end -->"
     while True:
         start = text.find(start_marker)
         if start == -1:
@@ -284,6 +342,229 @@ def remove_existing_render_block(text: str, task_id: str) -> str:
         else:
             line_end += 1
         text = text[:line_start] + text[line_end:]
+
+
+def ensure_report_card(text: str, spec: TaskRenderSpec) -> str:
+    task_marker = f"<span class=\"badge blue\"><code>{spec.task_id}</code></span>"
+    text = remove_report_card(text, task_marker)
+    insert_at = cards_insert_position(text)
+    return text[:insert_at] + report_card(spec) + text[insert_at:]
+
+
+def prune_report_cards(text: str, task_ids: set[str]) -> str:
+    cards_start = text.rfind("<section class=\"cards\">")
+    if cards_start == -1:
+        return text
+    cards_end = cards_section_end(text, cards_start)
+    if cards_end == -1:
+        return text
+    section = text[cards_start:cards_end]
+    kept = []
+    for article in re.findall(r"\s*<article class=\"card\">.*?</article>\n?", section, flags=re.S):
+        task_id = article_task_id(article)
+        if task_id in task_ids:
+            kept.append(article)
+    next_section = "    <section class=\"cards\">\n" + "".join(kept)
+    return text[:cards_start] + next_section + text[cards_end:]
+
+
+def current_only_report_shell(existing_text: str, specs: list[TaskRenderSpec]) -> str:
+    style = extract_style(existing_text)
+    task_count = len(specs)
+    family_list = ", ".join(html.escape(spec.title) for spec in specs)
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Synthetic OpenFOAM Problem Review</title>
+  <style>
+{style}
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div class="hero-main">
+        <span class="eyebrow">Synthetic OpenFOAM task review</span>
+        <h1>Current generated CFD repair problems and physical renders</h1>
+        <p class="lead">
+          This report contains only the {task_count} current tasks mirrored under
+          <code>synthetic_openfoam_pipeline/problems</code>. Each card includes the
+          task instructions, grader focus, hidden-variant axes, and a physical
+          OpenFOAM render generated from the oracle-repaired case.
+        </p>
+        <div class="note">
+          Current task families: {family_list}.
+        </div>
+      </div>
+      <aside class="hero-side">
+        <div class="stat-grid">
+          <div class="stat">
+            <strong>{task_count}</strong>
+            <span>Current problems</span>
+          </div>
+          <div class="stat">
+            <strong>60</strong>
+            <span>Render frames per video</span>
+          </div>
+          <div class="stat">
+            <strong>250</strong>
+            <span>Minimum render end time</span>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="cards">
+    </section>
+
+    <section class="overview">
+      <h2>Evidence Used</h2>
+      <p>
+        The problem cards are generated from each task's
+        <code>instruction.md</code>, <code>generation_report.json</code>,
+        <code>expected_metrics.json</code>, and hidden-variant metadata.
+        Physical videos are rendered from the oracle-repaired OpenFOAM cases.
+      </p>
+    </section>
+
+    <div class="footer">
+      Generated from the repository's current synthetic OpenFOAM task artifacts.
+    </div>
+  </main>
+</body>
+</html>
+"""
+
+
+def extract_style(text: str) -> str:
+    match = re.search(r"<style>\n?(.*?)\n?\s*</style>", text, flags=re.S)
+    return match.group(1) if match else RENDER_CSS
+
+
+def article_task_id(article: str) -> str | None:
+    match = re.search(r"<span class=\"badge blue\"><code>(openfoam-[^<]+)</code></span>", article)
+    return html.unescape(match.group(1)) if match else None
+
+
+def article_is_inside_cards(text: str, task_marker: str) -> bool:
+    marker_index = text.find(task_marker)
+    if marker_index == -1:
+        return False
+    article_start = text.rfind("<article class=\"card\">", 0, marker_index)
+    cards_start = text.rfind("<section class=\"cards\">", 0, marker_index)
+    if article_start == -1 or cards_start == -1:
+        return False
+    cards_end = cards_section_end(text, cards_start)
+    return cards_end != -1 and article_start < marker_index < cards_end
+
+
+def remove_report_card(text: str, task_marker: str) -> str:
+    marker_index = text.find(task_marker)
+    if marker_index == -1:
+        return text
+    article_start = text.rfind("<article class=\"card\">", 0, marker_index)
+    article_end = text.find("</article>", marker_index)
+    if article_start == -1 or article_end == -1:
+        return text
+    line_end = text.find("\n", article_end + len("</article>"))
+    if line_end == -1:
+        line_end = article_end + len("</article>")
+    else:
+        line_end += 1
+    return text[:article_start] + text[line_end:]
+
+
+def cards_insert_position(text: str) -> int:
+    cards_start = text.rfind("<section class=\"cards\">")
+    if cards_start == -1:
+        raise ValueError("report is missing a cards section")
+    cards_end = cards_section_end(text, cards_start)
+    if cards_end == -1:
+        raise ValueError("could not locate report cards closing tag")
+    return text.rfind("\n", 0, cards_end) + 1
+
+
+def cards_section_end(text: str, cards_start: int) -> int:
+    next_overview = text.find("\n\n    <section class=\"overview\"", cards_start)
+    if next_overview == -1:
+        return text.find("</section>", cards_start)
+    return text.rfind("</section>", cards_start, next_overview)
+
+
+def report_card(spec: TaskRenderSpec) -> str:
+    family = html.escape(spec.family.replace("_", " "))
+    title = html.escape(spec.title)
+    task_id = html.escape(spec.task_id)
+    seed = html.escape(str(spec.seed_case.get("seed_id", "synthetic case")))
+    instructions = instruction_html(spec.task_dir / "instruction.md")
+    metrics = expected_metrics_items(spec.expected_metrics)
+    hidden_axes = hidden_variant_axes(spec.hidden_variants)
+    metric_items = "\n".join(f"              <li>{item}</li>" for item in metrics)
+    axis_items = "\n".join(f"              <li><code>{html.escape(axis)}</code></li>" for axis in hidden_axes)
+    if not axis_items:
+        axis_items = "              <li>No hidden variant axes declared.</li>"
+    return f"""      <article class="card">
+        <div class="card-header">
+          <div>
+            <h3>{title}</h3>
+            <div class="badges">
+              <span class="badge blue"><code>{task_id}</code></span>
+              <span class="badge green">{seed}</span>
+              <span class="badge purple">{family}</span>
+            </div>
+          </div>
+          <span class="badge red">Harness: generated task</span>
+        </div>
+        <div class="card-body">
+          <section class="section full">
+            <div class="label">Task summary</div>
+            <div class="task-prompt-scroll">
+{instructions}
+            </div>
+          </section>
+          <section class="section">
+            <div class="label">Grader focus</div>
+            <ul>
+{metric_items}
+            </ul>
+          </section>
+          <section class="section full">
+            <div class="label">Hidden variant axes</div>
+            <ul>
+{axis_items}
+            </ul>
+          </section>
+        </div>
+      </article>
+"""
+
+
+def instruction_html(path: Path) -> str:
+    if not path.exists():
+        return "              <p>Instruction file is not available for this generated task.</p>"
+    return "\n".join(f"              <p>{html.escape(line) or '&nbsp;'}</p>" for line in path.read_text().splitlines())
+
+
+def expected_metrics_items(expected_metrics: dict) -> list[str]:
+    items = []
+    for key, value in sorted(expected_metrics.items()):
+        if value in (None, [], {}, ""):
+            continue
+        safe_key = html.escape(str(key))
+        safe_value = html.escape(json.dumps(value) if isinstance(value, (dict, list)) else str(value))
+        items.append(f"<code>{safe_key}</code>: <code>{safe_value}</code>")
+    return items or ["Generated scorer metadata is available in the task directory."]
+
+
+def hidden_variant_axes(hidden_variants: list[dict]) -> list[str]:
+    axes: list[str] = []
+    for variant in hidden_variants:
+        for axis in (variant.get("changes") or {}):
+            if axis not in axes:
+                axes.append(axis)
+    return axes
 
 
 def render_boundary_condition(spec: TaskRenderSpec, frames_dir: Path, frames: int) -> None:

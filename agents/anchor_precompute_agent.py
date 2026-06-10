@@ -1,18 +1,33 @@
 from __future__ import annotations
 
 from dataclasses import asdict
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import tempfile
 from typing import Any
 
 from synthetic_openfoam_pipeline.schemas import HiddenVariant, TaskCandidate
+from synthetic_openfoam_pipeline.openfoam.dictionary_edit import apply_structured_edit, replace_required
+from synthetic_openfoam_pipeline.utils.templates import GRADER_LIB
 
 
 class AnchorPrecomputeAgent:
+    def __init__(self, *, real_precompute: bool | None = None) -> None:
+        self.real_precompute = (
+            os.environ.get("SYNTHETIC_OPENFOAM_REAL_ANCHORS") == "1"
+            if real_precompute is None
+            else real_precompute
+        )
+
     def attach_anchors(self, candidate: TaskCandidate) -> TaskCandidate:
+        mode = "openfoam-precomputed" if self._can_precompute_real() else "deterministic-formula"
         anchors = {
             "version": 1,
             "family": candidate.family,
             "seed_case": candidate.seed_case.seed_id,
-            "mode": "deterministic-formula",
+            "mode": mode,
             "by_variant": {
                 variant.name: self._variant_anchor(candidate, variant)
                 for variant in candidate.hidden_variants
@@ -25,6 +40,9 @@ class AnchorPrecomputeAgent:
             "variant_count": len(anchors["by_variant"]),
         }
         return candidate
+
+    def _can_precompute_real(self) -> bool:
+        return self.real_precompute and all(shutil.which(command) for command in ("blockMesh", "checkMesh", "simpleFoam"))
 
     def _variant_anchor(self, candidate: TaskCandidate, variant: HiddenVariant) -> dict[str, Any]:
         changes = variant.changes
@@ -78,12 +96,73 @@ class AnchorPrecomputeAgent:
             "scalar_average": 0.20,
             "write_interval": 0.0,
         }
-        return {
+        anchor = {
             "changes": dict(changes),
             "oracle": oracle,
             "baseline": baseline,
             "tolerances": tolerances,
         }
+        if self._can_precompute_real():
+            real = self._real_anchor_metrics(candidate, variant)
+            if real:
+                anchor["oracle"].update(real.get("oracle", {}))
+                anchor["baseline"].update(real.get("baseline", {}))
+        return anchor
+
+    def _real_anchor_metrics(self, candidate: TaskCandidate, variant: HiddenVariant) -> dict[str, dict[str, Any]] | None:
+        # Optional slow path for developer/CI environments with OpenFOAM installed.
+        # Formula anchors remain the normal deterministic fallback.
+        try:
+            with tempfile.TemporaryDirectory(prefix="synthetic-openfoam-anchor-") as tmp:
+                helper = Path(tmp) / "openfoam_grader_lib.py"
+                helper.write_text(GRADER_LIB)
+                script = Path(tmp) / "precompute.py"
+                script.write_text(
+                    """
+import importlib.util, json, shutil, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location('openfoam_grader_lib', sys.argv[1])
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+case = Path(sys.argv[2])
+expected = json.loads(sys.argv[3])
+variant = json.loads(sys.argv[4])
+mod.apply_hidden_variant(case, variant)
+run = mod.RealOpenFoamRunner().run(case, expected, variant)
+print(json.dumps(run.metrics))
+"""
+                )
+                oracle_case = Path(tmp) / "oracle"
+                baseline_case = Path(tmp) / "baseline"
+                shutil.copytree(candidate.oracle_case_dir, oracle_case)
+                shutil.copytree(candidate.starter_case_dir, baseline_case)
+                if candidate.task_spec is not None:
+                    for step in candidate.task_spec.oracle_repair.steps:
+                        target = oracle_case / step.path
+                        if not apply_structured_edit(target, step.old, step.new, mode=step.mode):
+                            replace_required(target, step.old, step.new)
+                expected = asdict(candidate.expected_metrics)
+                expected["family"] = candidate.family
+                variant_json = json.dumps({"name": variant.name, "changes": variant.changes})
+                oracle = subprocess.run(
+                    ["python3", str(script), str(helper), str(oracle_case), json.dumps(expected), variant_json],
+                    text=True,
+                    capture_output=True,
+                    timeout=240,
+                    check=False,
+                )
+                baseline = subprocess.run(
+                    ["python3", str(script), str(helper), str(baseline_case), json.dumps(expected), variant_json],
+                    text=True,
+                    capture_output=True,
+                    timeout=240,
+                    check=False,
+                )
+                if oracle.returncode != 0 or baseline.returncode != 0:
+                    return None
+                return {"oracle": json.loads(oracle.stdout), "baseline": json.loads(baseline.stdout)}
+        except Exception:
+            return None
 
     def _inlet_area(self, case_kind: str) -> float:
         if case_kind in {"cavity", "heated_cavity"}:

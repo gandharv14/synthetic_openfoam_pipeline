@@ -411,12 +411,27 @@ def _force_function_objects() -> str:
 """
 
 
+SYMPTOM_EVIDENCE_PLACEHOLDER = "<<SYMPTOM_EVIDENCE>>"
+
+
 def _prompt(name: str, objective: str) -> str:
+    # The family name must not appear anywhere in the public instruction: the
+    # agent has to diagnose the problem from the diagnostic evidence below,
+    # not pattern-match a workflow title.
+    _ = name
     return f"""# OpenFOAM Engineering Repair Ticket
 
 You are given a public starter OpenFOAM case at `/data/starter_case.tar.gz`.
 
-The case belongs to the `{name}` workflow. Your job is to {objective}.
+Your job is to {objective}.
+
+## Observed symptoms
+
+Diagnostic evidence captured from the starter case as shipped:
+
+```text
+{SYMPTOM_EVIDENCE_PLACEHOLDER}
+```
 
 ## Required submission
 
@@ -438,6 +453,16 @@ The archive must contain a corrected OpenFOAM case directory with the usual `0/`
 - The hidden tests perturb operating conditions such as inlet speed, viscosity,
   write interval, probe location, source strength, or mild mesh grading.
 - Preserve engineering intent rather than tuning to a single visible run.
+
+## Engineering evidence expected
+
+Your fix should leave a case that can be meshed, checked, and solved normally.
+Where the workflow involves instrumentation or calibrated behavior, preserve
+OpenFOAM function objects and outputs that demonstrate residual convergence,
+bounded continuity error, and relevant engineering responses such as flow rate,
+pressure drop, source response, force coefficients, scalar bounds, or mesh
+quality. Hidden validation checks these kinds of evidence without exposing the
+private operating points.
 """
 
 

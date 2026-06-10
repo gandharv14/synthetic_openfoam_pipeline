@@ -1,0 +1,335 @@
+{
+  "by_variant": {
+    "private_variant_01": {
+      "baseline": {
+        "anchor_comparison": {
+          "present": false
+        },
+        "continuity_window": {
+          "count": 20.0,
+          "last": 1.32137e-17,
+          "max": 4.91212e-06
+        },
+        "force_Cd": -1.0,
+        "force_Cl": -1.0,
+        "mass_balance": 0.0761033,
+        "mesh_cells": 100,
+        "mesh_grading": 1.5,
+        "residual": 0.0431625,
+        "residual_window": {
+          "count": 20.0,
+          "last": 8.24094e-07,
+          "max": 2.85431e-06
+        },
+        "source_strength": -1.0
+      },
+      "baseline_status": {
+        "mesh_ok": true,
+        "metrics_ok": false,
+        "ok": false,
+        "post_ok": false,
+        "reason": "real-openfoam",
+        "solver_ok": true
+      },
+      "changes": {
+        "probe_location": [
+          0.5,
+          0.25,
+          0.05
+        ],
+        "write_interval": 8
+      },
+      "oracle": {
+        "anchor_comparison": {
+          "present": false
+        },
+        "continuity_window": {
+          "count": 20.0,
+          "last": 1.32137e-17,
+          "max": 4.91212e-06
+        },
+        "force_Cd": -1.0,
+        "force_Cl": -1.0,
+        "mass_balance": 0.0761033,
+        "mesh_cells": 100,
+        "mesh_grading": 1.5,
+        "residual": 0.0431625,
+        "residual_window": {
+          "count": 20.0,
+          "last": 8.24094e-07,
+          "max": 2.85431e-06
+        },
+        "source_strength": -1.0
+      },
+      "oracle_status": {
+        "mesh_ok": true,
+        "metrics_ok": false,
+        "ok": false,
+        "post_ok": true,
+        "reason": "real-openfoam",
+        "solver_ok": true
+      },
+      "tolerances": {
+        "flow_rate": 0.1,
+        "force_Cd": 1.0,
+        "force_Cl": 1.0,
+        "mesh_cells": 0.0,
+        "mesh_grading": 0.05,
+        "pressure_drop": 0.5,
+        "scalar_average": 0.25,
+        "source_response": 0.75,
+        "source_strength": 0.05,
+        "write_interval": 0.0
+      }
+    },
+    "private_variant_02": {
+      "baseline": {
+        "anchor_comparison": {
+          "present": false
+        },
+        "continuity_window": {
+          "count": 20.0,
+          "last": 1.32137e-17,
+          "max": 4.91212e-06
+        },
+        "force_Cd": -1.0,
+        "force_Cl": -1.0,
+        "mass_balance": 0.0761033,
+        "mesh_cells": 100,
+        "mesh_grading": 1.5,
+        "residual": 0.0431625,
+        "residual_window": {
+          "count": 20.0,
+          "last": 8.24094e-07,
+          "max": 2.85431e-06
+        },
+        "source_strength": -1.0
+      },
+      "baseline_status": {
+        "mesh_ok": true,
+        "metrics_ok": false,
+        "ok": false,
+        "post_ok": false,
+        "reason": "real-openfoam",
+        "solver_ok": true
+      },
+      "changes": {
+        "probe_location": [
+          1.6,
+          0.75,
+          0.05
+        ],
+        "write_interval": 5
+      },
+      "oracle": {
+        "anchor_comparison": {
+          "present": false
+        },
+        "continuity_window": {
+          "count": 20.0,
+          "last": 1.32137e-17,
+          "max": 4.91212e-06
+        },
+        "force_Cd": -1.0,
+        "force_Cl": -1.0,
+        "mass_balance": 0.0761033,
+        "mesh_cells": 100,
+        "mesh_grading": 1.5,
+        "residual": 0.0431625,
+        "residual_window": {
+          "count": 20.0,
+          "last": 8.24094e-07,
+          "max": 2.85431e-06
+        },
+        "source_strength": -1.0
+      },
+      "oracle_status": {
+        "mesh_ok": true,
+        "metrics_ok": false,
+        "ok": false,
+        "post_ok": true,
+        "reason": "real-openfoam",
+        "solver_ok": true
+      },
+      "tolerances": {
+        "flow_rate": 0.1,
+        "force_Cd": 1.0,
+        "force_Cl": 1.0,
+        "mesh_cells": 0.0,
+        "mesh_grading": 0.05,
+        "pressure_drop": 0.5,
+        "scalar_average": 0.25,
+        "source_response": 0.75,
+        "source_strength": 0.05,
+        "write_interval": 0.0
+      }
+    },
+    "private_variant_03": {
+      "baseline": {
+        "anchor_comparison": {
+          "present": false
+        },
+        "continuity_window": {
+          "count": 20.0,
+          "last": 1.32137e-17,
+          "max": 4.91212e-06
+        },
+        "force_Cd": -1.0,
+        "force_Cl": -1.0,
+        "mass_balance": 0.0761033,
+        "mesh_cells": 100,
+        "mesh_grading": 1.5,
+        "residual": 0.0431625,
+        "residual_window": {
+          "count": 20.0,
+          "last": 8.24094e-07,
+          "max": 2.85431e-06
+        },
+        "source_strength": -1.0
+      },
+      "baseline_status": {
+        "mesh_ok": true,
+        "metrics_ok": false,
+        "ok": false,
+        "post_ok": false,
+        "reason": "real-openfoam",
+        "solver_ok": true
+      },
+      "changes": {
+        "probe_location": [
+          1.25,
+          0.5,
+          0.05
+        ],
+        "write_interval": 13
+      },
+      "oracle": {
+        "anchor_comparison": {
+          "present": false
+        },
+        "continuity_window": {
+          "count": 20.0,
+          "last": 1.32137e-17,
+          "max": 4.91212e-06
+        },
+        "force_Cd": -1.0,
+        "force_Cl": -1.0,
+        "mass_balance": 0.0761033,
+        "mesh_cells": 100,
+        "mesh_grading": 1.5,
+        "residual": 0.0431625,
+        "residual_window": {
+          "count": 20.0,
+          "last": 8.24094e-07,
+          "max": 2.85431e-06
+        },
+        "source_strength": -1.0
+      },
+      "oracle_status": {
+        "mesh_ok": true,
+        "metrics_ok": false,
+        "ok": false,
+        "post_ok": true,
+        "reason": "real-openfoam",
+        "solver_ok": true
+      },
+      "tolerances": {
+        "flow_rate": 0.1,
+        "force_Cd": 1.0,
+        "force_Cl": 1.0,
+        "mesh_cells": 0.0,
+        "mesh_grading": 0.05,
+        "pressure_drop": 0.5,
+        "scalar_average": 0.25,
+        "source_response": 0.75,
+        "source_strength": 0.05,
+        "write_interval": 0.0
+      }
+    },
+    "private_variant_04": {
+      "baseline": {
+        "anchor_comparison": {
+          "present": false
+        },
+        "continuity_window": {
+          "count": 20.0,
+          "last": 1.32137e-17,
+          "max": 4.91212e-06
+        },
+        "force_Cd": -1.0,
+        "force_Cl": -1.0,
+        "mass_balance": 0.0761033,
+        "mesh_cells": 100,
+        "mesh_grading": 1.5,
+        "residual": 0.0431625,
+        "residual_window": {
+          "count": 20.0,
+          "last": 8.24094e-07,
+          "max": 2.85431e-06
+        },
+        "source_strength": -1.0
+      },
+      "baseline_status": {
+        "mesh_ok": true,
+        "metrics_ok": false,
+        "ok": false,
+        "post_ok": false,
+        "reason": "real-openfoam",
+        "solver_ok": true
+      },
+      "changes": {
+        "probe_location": [
+          0.75,
+          0.1,
+          0.0
+        ],
+        "write_interval": 13
+      },
+      "oracle": {
+        "anchor_comparison": {
+          "present": false
+        },
+        "continuity_window": {
+          "count": 20.0,
+          "last": 1.32137e-17,
+          "max": 4.91212e-06
+        },
+        "force_Cd": -1.0,
+        "force_Cl": -1.0,
+        "mass_balance": 0.0761033,
+        "mesh_cells": 100,
+        "mesh_grading": 1.5,
+        "residual": 0.0431625,
+        "residual_window": {
+          "count": 20.0,
+          "last": 8.24094e-07,
+          "max": 2.85431e-06
+        },
+        "source_strength": -1.0
+      },
+      "oracle_status": {
+        "mesh_ok": true,
+        "metrics_ok": false,
+        "ok": false,
+        "post_ok": true,
+        "reason": "real-openfoam",
+        "solver_ok": true
+      },
+      "tolerances": {
+        "flow_rate": 0.1,
+        "force_Cd": 1.0,
+        "force_Cl": 1.0,
+        "mesh_cells": 0.0,
+        "mesh_grading": 0.05,
+        "pressure_drop": 0.5,
+        "scalar_average": 0.25,
+        "source_response": 0.75,
+        "source_strength": 0.05,
+        "write_interval": 0.0
+      }
+    }
+  },
+  "family": "force_coeff_instrumentation",
+  "mode": "openfoam-precomputed",
+  "version": 1
+}

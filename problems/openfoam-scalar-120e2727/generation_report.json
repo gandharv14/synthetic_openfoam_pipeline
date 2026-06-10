@@ -1,0 +1,146 @@
+{
+  "expected_metrics": {
+    "mass_balance_max": 0.002,
+    "postprocessing_required": [
+      "residuals",
+      "fieldMinMax"
+    ],
+    "pressure_drop_max": 5.0,
+    "pressure_drop_min": 0.05,
+    "residual_max": 0.0001,
+    "source_target": null,
+    "tolerance": 0.05
+  },
+  "family": "scalar_transport_repair",
+  "forbidden_edits": [
+    {
+      "description": "Must preserve physical input",
+      "path": "constant/transportProperties",
+      "sha256": "9be7e9acaa702482805a26b1332a3b4cffaf8aec4c109cf98093b7a3bcba6b54"
+    },
+    {
+      "description": "Must preserve physical input",
+      "path": "0/U",
+      "sha256": "1504884bbf7c53c6e7be2a80b3a8b50fcf499d472ed9ec2314db145ed5ff9915"
+    },
+    {
+      "description": "Must preserve physical input",
+      "path": "0/p",
+      "sha256": "2928bf1a66b3bc7da2e7ed74cd157cb61c68513c0c1ed12e446490f49e1da628"
+    },
+    {
+      "description": "Must preserve physical input",
+      "path": "system/blockMeshDict",
+      "sha256": "64b81a20b59756a6ee3abd4b93adc199744dbc8c9df1f97e2235110e06873a29"
+    }
+  ],
+  "generation_report": {
+    "claude_hard_rationale": "Likely Claude-hard because the scalar field is ancillary to the simple flow solve, so hidden checks focus on preserving the exact thermal boundary intent.",
+    "expected_metrics": {
+      "mass_balance_max": 0.002,
+      "postprocessing_required": [
+        "residuals",
+        "fieldMinMax"
+      ],
+      "pressure_drop_max": 5.0,
+      "pressure_drop_min": 0.05,
+      "residual_max": 0.0001,
+      "source_target": null,
+      "tolerance": 0.05
+    },
+    "family_title": "Scalar-transport repair",
+    "hidden_variant_axes": [
+      "viscosity",
+      "write_interval"
+    ],
+    "hidden_variant_count": 4,
+    "hidden_variant_grid_size": 16,
+    "metric_anchor_summary": {
+      "mode": "openfoam-precomputed",
+      "variant_count": 4,
+      "version": 1
+    },
+    "oracle_strategy": "Extract starter_case.tar.gz, apply the family-specific OpenFOAM dictionary repair, then package the corrected case as /tmp/output/fixed_case.tar.gz.",
+    "prompt_rewrite": {
+      "model": null,
+      "reason": "prompt rewriting disabled by config",
+      "status": "disabled"
+    },
+    "symptom": "The thermal scalar field is present, but the heated-wall boundary was replaced with an unconstrained gradient."
+  },
+  "hidden_variant_axes": [
+    "viscosity",
+    "write_interval"
+  ],
+  "hidden_variants": [
+    {
+      "changes": {
+        "viscosity": 0.0065,
+        "write_interval": 21
+      },
+      "expected_overrides": {},
+      "name": "private_variant_01"
+    },
+    {
+      "changes": {
+        "viscosity": 0.008,
+        "write_interval": 5
+      },
+      "expected_overrides": {},
+      "name": "private_variant_02"
+    },
+    {
+      "changes": {
+        "viscosity": 0.0125,
+        "write_interval": 21
+      },
+      "expected_overrides": {},
+      "name": "private_variant_03"
+    },
+    {
+      "changes": {
+        "viscosity": 0.0125,
+        "write_interval": 8
+      },
+      "expected_overrides": {},
+      "name": "private_variant_04"
+    }
+  ],
+  "output_contract": "/tmp/output/fixed_case.tar.gz",
+  "rationale": "Likely Claude-hard because the scalar field is ancillary to the simple flow solve, so hidden checks focus on preserving the exact thermal boundary intent.",
+  "seed": 20260612,
+  "seed_case": {
+    "case_kind": "heated_cavity",
+    "compatible_families": [
+      "postprocessing_instrumentation",
+      "mesh_quality_repair",
+      "force_coeff_instrumentation",
+      "scalar_transport_repair"
+    ],
+    "parameters": {
+      "hot_wall_temperature": 310,
+      "lid_velocity": 1.0,
+      "viscosity": 0.01
+    },
+    "runtime_estimate_sec": 30,
+    "seed_id": "heated-cavity",
+    "solver": "simpleFoam"
+  },
+  "skill_graph": {
+    "family": "scalar_transport_repair",
+    "hidden_generalization_axes": [
+      "inlet velocity",
+      "viscosity",
+      "write interval",
+      "probe location",
+      "source strength",
+      "mesh grading"
+    ],
+    "requires_multi_file_consistency": true,
+    "skills": []
+  },
+  "status": "candidate",
+  "task_dir": "lbx-rl-tasks-iso-template/problems/openfoam-scalar-120e2727",
+  "task_id": "openfoam-scalar-120e2727",
+  "zip_path": null
+}

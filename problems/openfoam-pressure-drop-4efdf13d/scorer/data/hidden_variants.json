@@ -1,0 +1,34 @@
+[
+  {
+    "changes": {
+      "inlet_velocity": 1.15,
+      "viscosity": 0.016
+    },
+    "expected_overrides": {},
+    "name": "private_variant_01"
+  },
+  {
+    "changes": {
+      "inlet_velocity": 1.6,
+      "viscosity": 0.016
+    },
+    "expected_overrides": {},
+    "name": "private_variant_02"
+  },
+  {
+    "changes": {
+      "inlet_velocity": 1.35,
+      "viscosity": 0.008
+    },
+    "expected_overrides": {},
+    "name": "private_variant_03"
+  },
+  {
+    "changes": {
+      "inlet_velocity": 0.75,
+      "viscosity": 0.008
+    },
+    "expected_overrides": {},
+    "name": "private_variant_04"
+  }
+]

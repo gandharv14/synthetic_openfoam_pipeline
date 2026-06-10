@@ -339,6 +339,12 @@ def test_script() -> str:
         from compute_score import compute_score
         result = compute_score(Path("/tmp/output"), None, Path(sys.argv[2]))
         Path("/tmp/openfoam-test-logs/reward.json").write_text(json.dumps(result, indent=2))
+        details = {
+            "score": result.get("score"),
+            "criteria": result.get("metadata", {}).get("criteria", []),
+            "hidden_variants": result.get("metadata", {}).get("hidden_variants", []),
+        }
+        Path("/tmp/openfoam-test-logs/reward-details.json").write_text(json.dumps(details, indent=2))
         print("score:", result.get("score"))
         PY
         """
@@ -382,6 +388,8 @@ class RunnerResult:
     no_numerical_errors: bool
     metrics: dict[str, Any]
     reason: str = ""
+    logs: dict[str, str] | None = None
+    postprocessing: dict[str, Any] | None = None
 
 
 def sha256_file(path: Path) -> str:
@@ -554,53 +562,52 @@ def mesh_grading(case_dir: Path) -> float | None:
     return float(match.group(1)) if match else None
 
 
-def family_repair_ok(case_dir: Path, family: str, expected: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
-    if family == "boundary_condition_repair":
-        outlet = patch_entries(case_dir / "0" / "p", "outlet")
-        ok = outlet.get("type") == "fixedValue" and outlet.get("value") == "uniform 0"
-        return ok, {"outlet_pressure_fixed_value": ok}
-    if family == "solver_convergence_repair":
-        schemes = read_text(case_dir / "system" / "fvSchemes")
-        ok = "div(phi,U) Gauss linearUpwind grad(U);" in schemes or "div(phi,U) Gauss upwind;" in schemes
-        return ok, {"stable_div_phi_u_scheme": ok}
-    if family == "mesh_quality_repair":
-        grading = mesh_grading(case_dir)
-        ok = grading is not None and grading <= 2.0
-        return ok, {"simple_grading_x": grading}
-    if family == "postprocessing_instrumentation":
-        present = functions_present(case_dir, ["residuals", "probes", "fieldMinMax"])
-        return all(present.values()), present
-    if family == "source_term_calibration":
-        value = source_strength(case_dir)
-        target = float(expected.get("source_target") or 0.2)
-        tol = float(expected.get("tolerance") or 0.05)
-        ok = value is not None and abs(value - target) <= tol
-        return ok, {"source_strength": value, "target": target, "tolerance": tol}
-    if family == "flow_rate_targeting":
-        inlet = patch_entries(case_dir / "0" / "U", "inlet")
-        ok = inlet.get("type") == "fixedValue" and inlet.get("value") == "uniform (1 0 0)"
-        return ok, {"target_inlet_velocity": ok}
-    if family == "pressure_drop_calibration":
-        outlet = patch_entries(case_dir / "0" / "p", "outlet")
-        ok = outlet.get("type") == "fixedValue" and outlet.get("value") == "uniform 0"
-        return ok, {"zero_outlet_pressure_datum": ok}
-    if family == "transient_setup_repair":
-        control = read_text(case_dir / "system" / "controlDict")
-        end_ok = bool(re.search(r"\bendTime\s+100;", control))
-        write_ok = bool(re.search(r"\bwriteInterval\s+20;", control))
-        return end_ok and write_ok, {"end_time_100": end_ok, "write_interval_20": write_ok}
-    if family == "force_coeff_instrumentation":
-        present = functions_present(case_dir, ["residuals", "probes", "fieldMinMax", "forceCoeffs"])
-        return all(present.values()), present
-    if family == "scalar_transport_repair":
-        wall = patch_entries(case_dir / "0" / "T", "movingWall")
-        ok = wall.get("type") == "fixedValue" and wall.get("value") == "uniform 310"
-        return ok, {"heated_wall_temperature_fixed": ok}
-    if family == "mesh_resolution_tradeoff":
-        mesh = read_text(case_dir / "system" / "blockMeshDict")
-        ok = "(20 10 1) simpleGrading (1.5 1 1)" in mesh and "(80 40 1)" not in mesh
-        return ok, {"compact_cell_count": ok}
-    return False, {"unknown_family": family}
+BASELINE_BEHAVIOR_TARGETS: dict[str, dict[str, Any]] = {
+    # Documented operating points used when measuring the submission as-is.
+    # Hidden variants overwrite these axes afterwards, so the baseline run is
+    # the only place where the submitted case's own calibration is observable.
+    "flow_rate_targeting": {"inlet_velocity": 1.0},
+    "transient_setup_repair": {"write_interval": 20},
+}
+
+
+def family_repair_ok(
+    case_dir: Path,
+    family: str,
+    expected: dict[str, Any],
+    runner: Any | None = None,
+) -> tuple[bool, dict[str, Any]]:
+    """Behavior-based repair gate.
+
+    Instead of string-matching dictionary contents, run the submitted case
+    as-is through the OpenFOAM runner and require the measured quantities
+    (flow rate, pressure drop, checkMesh quality, function-object outputs)
+    to fall inside the ExpectedMetrics tolerance bands.
+    """
+    runner = runner if runner is not None else select_runner()
+    variant = {"name": "baseline_behavior", "changes": dict(BASELINE_BEHAVIOR_TARGETS.get(family, {}))}
+    tmp = Path(tempfile.mkdtemp(prefix="synthetic-openfoam-baseline-"))
+    try:
+        baseline_case = tmp / "case"
+        shutil.copytree(case_dir, baseline_case)
+        run = runner.run(baseline_case, expected, variant)
+    except Exception as exc:  # noqa: BLE001 - grader must not crash on invalid submissions.
+        return False, {"family": family, "mode": "behavioral-baseline-run", "error": str(exc)}
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    return bool(run.ok), {
+        "family": family,
+        "mode": "behavioral-baseline-run",
+        "baseline_targets": variant["changes"],
+        "mesh_ok": run.mesh_ok,
+        "solver_ok": run.solver_ok,
+        "post_ok": run.post_ok,
+        "metrics_ok": run.metrics_ok,
+        "no_numerical_errors": run.no_numerical_errors,
+        "reason": run.reason,
+        "metrics": run.metrics,
+        "postprocessing": run.postprocessing or {},
+    }
 
 
 def application(case_dir: Path) -> str:
@@ -656,6 +663,20 @@ def latest_time_dir(case_dir: Path) -> Path | None:
     return max(times, default=(0.0, None))[1]
 
 
+def positive_time_dirs(case_dir: Path) -> list[float]:
+    times: list[float] = []
+    for path in case_dir.iterdir() if case_dir.exists() else []:
+        if not path.is_dir():
+            continue
+        try:
+            value = float(path.name)
+        except ValueError:
+            continue
+        if value > 0:
+            times.append(value)
+    return sorted(times)
+
+
 def _parse_foam_value(raw: str) -> list[float]:
     raw = raw.strip()
     if raw.startswith("(") and raw.endswith(")"):
@@ -683,6 +704,28 @@ def latest_field_values(case_dir: Path, field: str) -> list[float]:
         if values:
             return values
     return field_numeric_values(case_dir / "0" / field)
+
+
+def patch_field_value(case_dir: Path, field: str, patch: str) -> float | None:
+    """Measured value held on a boundary patch, preferring the solved state."""
+    paths: list[Path] = []
+    latest = latest_time_dir(case_dir)
+    if latest is not None:
+        paths.append(latest / field)
+    paths.append(case_dir / "0" / field)
+    for path in paths:
+        if not path.exists():
+            continue
+        values = numeric_values(patch_entries(path, patch).get("value", ""))
+        if values:
+            return sum(values) / len(values)
+    return None
+
+
+def outlet_datum_band(expected: dict[str, Any]) -> float:
+    # The outlet gauge pressure must sit near the documented zero datum; scale
+    # the allowed band off the calibrated pressure-drop ceiling.
+    return max(float(expected.get("tolerance") or 0.05) * max(float(expected.get("pressure_drop_max") or 5.0), 1.0), 0.05)
 
 
 def table_rows(path: Path) -> list[list[float]]:
@@ -772,10 +815,15 @@ def force_coefficients(case_dir: Path) -> dict[str, float]:
 
 
 def inlet_velocity(case_dir: Path) -> float | None:
-    u = read_text(case_dir / "0" / "U")
-    match = re.search(r"inlet\s*\{[^}]*value\s+uniform\s+\(([-+0-9.eE]+)", u, re.S)
-    if match:
-        return float(match.group(1))
+    candidates: list[Path] = []
+    latest = latest_time_dir(case_dir)
+    if latest is not None:
+        candidates.append(latest / "U")
+    candidates.append(case_dir / "0" / "U")
+    for path in candidates:
+        match = re.search(r"inlet\s*\{[^}]*value\s+uniform\s+\(([-+0-9.eE]+)", read_text(path), re.S)
+        if match:
+            return float(match.group(1))
     values = latest_field_values(case_dir, "U")
     return values[0] if values else None
 
@@ -808,14 +856,48 @@ def inlet_patch_area(case_dir: Path) -> float:
     return area or 0.1
 
 
-def post_outputs_ok(case_dir: Path, family: str, expected: dict[str, Any]) -> bool:
+def post_outputs_ok(case_dir: Path, family: str, expected: dict[str, Any], log: str = "") -> bool:
+    return not missing_post_outputs(case_dir, family, expected, log)
+
+
+def required_post_outputs(family: str, expected: dict[str, Any]) -> list[str]:
     required = list(expected.get("postprocessing_required") or [])
     if family == "force_coeff_instrumentation" and "forceCoeffs" not in required:
         required.append("forceCoeffs")
     if family == "source_term_calibration" and "fieldAverage" not in required:
         required.append("fieldAverage")
-    material = [name for name in required if name not in {"checkMesh", "fluxBalance"}]
-    return all(post_output_present(case_dir, name) for name in material)
+    return [name for name in required if name not in {"checkMesh", "fluxBalance"}]
+
+
+def missing_post_outputs(case_dir: Path, family: str, expected: dict[str, Any], log: str = "") -> list[str]:
+    missing: list[str] = []
+    declared = functions_present(case_dir, required_post_outputs(family, expected))
+    for name in required_post_outputs(family, expected):
+        if post_output_present(case_dir, name):
+            continue
+        if name == "residuals" and residual_max(log) is not None:
+            continue
+        if declared.get(name):
+            continue
+        missing.append(name)
+    return missing
+
+
+def solver_completed(case_dir: Path, log: str, expected: dict[str, Any]) -> bool:
+    latest = latest_time_dir(case_dir)
+    end_time = expected.get("end_time", 100)
+    try:
+        expected_end = float(end_time)
+    except (TypeError, ValueError):
+        expected_end = 100.0
+    if latest is not None:
+        try:
+            if float(latest.name) >= expected_end:
+                return True
+        except ValueError:
+            pass
+    lowered = log.lower()
+    return "end" in lowered and "time =" in lowered
 
 
 def anchor_metrics_ok(metrics: dict[str, Any], anchor: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
@@ -871,7 +953,11 @@ def physical_metrics_ok(case_dir: Path, expected: dict[str, Any], family: str, l
     }
     checks = [residual_ok, continuity_ok]
 
-    if family == "flow_rate_targeting":
+    if family == "boundary_condition_repair":
+        datum = patch_field_value(case_dir, "p", "outlet")
+        metrics["outlet_pressure"] = datum if datum is not None else -1.0
+        checks.append(datum is not None and abs(datum) <= outlet_datum_band(expected))
+    elif family == "flow_rate_targeting":
         velocity = inlet_velocity(case_dir)
         area = inlet_patch_area(case_dir)
         target_velocity = float(variant.get("changes", {}).get("inlet_velocity", velocity if velocity is not None else 1.0))
@@ -882,11 +968,25 @@ def physical_metrics_ok(case_dir: Path, expected: dict[str, Any], family: str, l
         checks.append(flow is not None and abs(flow - target_flow) <= tol)
     elif family == "pressure_drop_calibration":
         pressure_drop = post_pressure_drop(case_dir)
+        datum = patch_field_value(case_dir, "p", "outlet")
         metrics["pressure_drop"] = pressure_drop if pressure_drop is not None else -1.0
+        metrics["outlet_pressure"] = datum if datum is not None else -1.0
         checks.append(
             pressure_drop is not None
             and float(expected.get("pressure_drop_min") or 0.0) <= pressure_drop <= float(expected.get("pressure_drop_max") or 1e9)
         )
+        checks.append(datum is not None and abs(datum) <= outlet_datum_band(expected))
+    elif family == "transient_setup_repair":
+        times = positive_time_dirs(case_dir)
+        end_time = float(expected.get("end_time") or 100)
+        interval = float(variant.get("changes", {}).get("write_interval") or 20)
+        expected_writes = max(int(end_time // max(interval, 1e-9)), 1)
+        metrics.update({
+            "write_count": float(len(times)),
+            "expected_write_count": float(expected_writes),
+            "latest_write_time": times[-1] if times else -1.0,
+        })
+        checks.append(len(times) >= expected_writes)
     elif family == "source_term_calibration":
         value = source_strength(case_dir)
         response = field_average_value(case_dir, "U")
@@ -897,20 +997,27 @@ def physical_metrics_ok(case_dir: Path, expected: dict[str, Any], family: str, l
         if response is not None:
             checks.append(response >= 0.0)
     elif family == "force_coeff_instrumentation":
+        # Coefficients must come from real postProcessing output; never
+        # substitute oracle anchor values for missing observations.
         coeffs = force_coefficients(case_dir)
         metrics.update({"force_Cd": coeffs.get("Cd", -1.0), "force_Cl": coeffs.get("Cl", -1.0)})
         checks.append("Cd" in coeffs and "Cl" in coeffs)
     elif family == "scalar_transport_repair":
         values = latest_field_values(case_dir, "T")
         avg = field_average_value(case_dir, "T")
+        wall = patch_field_value(case_dir, "T", "movingWall")
         scalar_min = min(values) if values else avg
         scalar_max = max(values) if values else avg
         metrics.update({
             "scalar_average": avg if avg is not None else -1.0,
             "scalar_min": scalar_min if scalar_min is not None else -1.0,
             "scalar_max": scalar_max if scalar_max is not None else -1.0,
+            "wall_scalar": wall if wall is not None else -1.0,
         })
         checks.append(scalar_min is not None and scalar_max is not None and 250 <= scalar_min <= scalar_max <= 400)
+        # The heated wall must hold a measurably elevated temperature
+        # (seed cases initialize the field at the 300 K ambient).
+        checks.append(wall is not None and wall >= 305.0)
     elif family in {"mesh_resolution_tradeoff", "mesh_quality_repair"}:
         cells = block_mesh_cells(case_dir)
         grading = mesh_grading(case_dir)
@@ -931,39 +1038,56 @@ def strip_function_objects_for_solver(case_dir: Path) -> None:
 
 
 class RealOpenFoamRunner:
+    def _run_command(self, name: str, command: str, timeout: int) -> tuple[bool, str, int]:
+        proc = subprocess.run(["bash", "-lc", command], text=True, capture_output=True, timeout=timeout, check=False)
+        log = proc.stdout + proc.stderr
+        return proc.returncode == 0, log, proc.returncode
+
     def run(self, case_dir: Path, expected: dict[str, Any], variant: dict[str, Any]) -> RunnerResult:
         timeout = int(expected.get("timeout_sec", 120))
         env_snippet = "source /etc/solver-envs.d/openfoam.sh >/dev/null 2>&1"
         solver = application(case_dir)
         family = str(expected.get("family", ""))
-        cmds = [
-            ("blockMesh", f"{env_snippet} && blockMesh -case {case_dir}"),
-            ("checkMesh", f"{env_snippet} && checkMesh -case {case_dir}"),
-            (solver, f"{env_snippet} && {solver} -case {case_dir}"),
-        ]
-        logs = []
+        logs: dict[str, str] = {}
         mesh_ok = False
         solver_ok = False
-        for name, cmd in cmds:
-            proc = subprocess.run(["bash", "-lc", cmd], text=True, capture_output=True, timeout=timeout, check=False)
-            log = proc.stdout + proc.stderr
-            logs.append(log)
-            if name == "blockMesh" and proc.returncode != 0:
-                return RunnerResult(False, False, False, False, False, "nan" not in log.lower(), {}, log[-2000:])
-            if name == "checkMesh":
-                mesh_ok = proc.returncode == 0 and "failed" not in log.lower()
-                if not mesh_ok:
-                    return RunnerResult(False, False, False, False, False, "nan" not in log.lower(), {}, log[-2000:])
-            if name == solver:
-                solver_ok = proc.returncode == 0
-                if not solver_ok:
-                    return RunnerResult(False, mesh_ok, False, False, False, "nan" not in log.lower(), {}, log[-2000:])
-        joined = "\n".join(logs)
+
+        ok, log, _ = self._run_command("blockMesh", f"{env_snippet} && blockMesh -case {case_dir}", timeout)
+        logs["blockMesh"] = log
+        if not ok:
+            return RunnerResult(False, False, False, False, False, "nan" not in log.lower(), {}, "blockMesh failed", logs, {"missing": []})
+
+        ok, log, _ = self._run_command("checkMesh", f"{env_snippet} && checkMesh -case {case_dir}", timeout)
+        logs["checkMesh"] = log
+        mesh_ok = ok and "failed" not in log.lower()
+        if not mesh_ok:
+            return RunnerResult(False, False, False, False, False, "nan" not in log.lower(), {}, "checkMesh failed", logs, {"missing": []})
+
+        control = case_dir / "system" / "controlDict"
+        original_control = read_text(control)
+        strip_function_objects_for_solver(case_dir)
+        ok, log, _ = self._run_command(solver, f"{env_snippet} && {solver} -case {case_dir}", timeout)
+        logs[solver] = log
+        solver_ok = ok and solver_completed(case_dir, log, expected)
+        if original_control:
+            control.write_text(original_control)
+        if not solver_ok:
+            return RunnerResult(False, mesh_ok, False, False, False, "nan" not in log.lower(), {}, "solver did not reach expected end time", logs, {"missing": missing_post_outputs(case_dir, family, expected, log)})
+
+        joined = "\n".join(logs.values())
+        missing_post = missing_post_outputs(case_dir, family, expected, joined)
+        if missing_post:
+            ok, post_log, _ = self._run_command("postProcess", f"{env_snippet} && postProcess -case {case_dir} -latestTime", timeout)
+            logs["postProcess"] = post_log
+            joined = "\n".join(logs.values())
+            missing_post = missing_post_outputs(case_dir, family, expected, joined)
+
         lowered = joined.lower().replace("floating point exception trapping enabled", "")
         bad = any(token in lowered for token in ["nan", "floating point exception", "fatal error", "diverg"])
-        post_ok = post_outputs_ok(case_dir, family, expected)
+        post_ok = not missing_post
         metrics_ok, metrics = physical_metrics_ok(case_dir, expected, family, joined, variant)
-        return RunnerResult(not bad and mesh_ok and solver_ok and post_ok and metrics_ok, mesh_ok, solver_ok, post_ok, metrics_ok, not bad, metrics, "real-openfoam")
+        postprocessing = {"required": required_post_outputs(family, expected), "missing": missing_post}
+        return RunnerResult(not bad and mesh_ok and solver_ok and post_ok and metrics_ok, mesh_ok, solver_ok, post_ok, metrics_ok, not bad, metrics, "real-openfoam", logs, postprocessing)
 
 
 def select_runner() -> Any:
@@ -1029,10 +1153,13 @@ def compute_score(workspace: Path, trajectory: list[dict[str, Any]] | None, priv
     score += _criterion(criteria, "required_openfoam_files", 0.10, required_ok, missing)
     forbidden_ok, changed = forbidden_unchanged(case_dir, forbidden)
     score += _criterion(criteria, "forbidden_edits_unchanged", 0.10, forbidden_ok, changed)
-    repair_ok, repair_detail = family_repair_ok(case_dir, family, expected)
-    score += _criterion(criteria, "family_specific_repair_present", 0.20, repair_ok, repair_detail)
 
     runner = select_runner()
+    # Behavior-based gate: the submission is run as-is and measured against the
+    # ExpectedMetrics tolerance bands (no dictionary string matching).
+    repair_ok, repair_detail = family_repair_ok(case_dir, family, expected, runner)
+    score += _criterion(criteria, "family_specific_repair_present", 0.10, repair_ok, repair_detail)
+
     variant_results = []
     all_mesh = all_solver = all_post = all_metrics = all_clean = True
     variants_applied = bool(hidden_variants)
@@ -1058,6 +1185,8 @@ def compute_score(workspace: Path, trajectory: list[dict[str, Any]] | None, priv
                 "no_numerical_errors": run.no_numerical_errors,
                 "metrics": run.metrics,
                 "reason": run.reason,
+                "log_tails": {name: text[-2000:] for name, text in (run.logs or {}).items()},
+                "postprocessing": run.postprocessing or {},
                 "expected_overrides": variant.get("expected_overrides") or {},
                 "metric_anchor_present": bool(anchor),
             })
@@ -1077,7 +1206,7 @@ def compute_score(workspace: Path, trajectory: list[dict[str, Any]] | None, priv
     score += _criterion(criteria, "solver_reaches_end_time", 0.15, all_solver, variant_results)
     score += _criterion(criteria, "no_nan_fpe_or_fatal_errors", 0.10, all_clean, variant_results)
     score += _criterion(criteria, "required_postprocessing_outputs", 0.10, all_post, expected.get("postprocessing_required", []))
-    score += _criterion(criteria, "engineering_metrics_within_tolerance", 0.10, all_metrics, expected)
+    score += _criterion(criteria, "engineering_metrics_within_tolerance", 0.20, all_metrics, expected)
 
     score = max(0.0, min(1.0, score))
     return _result(score, criteria, metadata)

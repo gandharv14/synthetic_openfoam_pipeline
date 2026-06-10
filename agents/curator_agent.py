@@ -9,16 +9,20 @@ class CuratorAgent:
         for candidate in candidates:
             result = by_id.get(candidate.task_id)
             if result:
-                candidate.status = result.status
                 candidate.generation_report["validation"] = result.to_dict()
+                # A rejection recorded earlier (e.g. anchor validation at
+                # export) is final; later stages must not resurrect the task.
+                if candidate.status is not TaskStatus.REJECTED:
+                    candidate.status = result.status
 
     def apply_adversarial(self, candidates: list[TaskCandidate], results: list[AdversarialResult]) -> None:
         by_id = {r.task_id: r for r in results}
         for candidate in candidates:
             result = by_id.get(candidate.task_id)
             if result:
-                candidate.status = result.status
                 candidate.generation_report["adversarial"] = result.to_dict()
+                if candidate.status is not TaskStatus.REJECTED:
+                    candidate.status = result.status
 
     def dedupe(self, candidates: list[TaskCandidate]) -> list[TaskCandidate]:
         seen: set[tuple[str, str]] = set()

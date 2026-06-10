@@ -34,6 +34,9 @@ class PipelineConfig:
     families: list[str] = field(default_factory=lambda: list(DEFAULT_FAMILIES))
     naive_threshold: float = 0.45
     oracle_threshold: float = 0.999
+    # Docker-based real-anchor precompute during export. Can be overridden via
+    # the SYNTHETIC_OPENFOAM_REQUIRE_REAL_ANCHORS environment variable.
+    real_anchors: bool = True
     attempts: int = 3
     harness_timeout_sec: int = 300
     zip_tasks: bool = False

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 from pathlib import Path
 
 from synthetic_openfoam_pipeline.agents.adversarial_filter_agent import AdversarialFilterAgent
@@ -9,12 +10,18 @@ from synthetic_openfoam_pipeline.agents.robustness_verifier_agent import Robustn
 from synthetic_openfoam_pipeline.config import DEFAULT_FAMILIES, PipelineConfig, load_config
 from synthetic_openfoam_pipeline.deployment.deploy_handful import deploy_handful, export_candidates, generate_candidates
 from synthetic_openfoam_pipeline.export.reports import ReportWriter
-from synthetic_openfoam_pipeline.rendering import render_all, update_report
+from synthetic_openfoam_pipeline.rendering import ProblemRender, render_all, render_all_physical, update_report
 
 
 def _families(value: str | None) -> list[str]:
     if not value:
         return list(DEFAULT_FAMILIES)
+    return [part.strip() for part in value.split(",") if part.strip()]
+
+
+def _task_ids(value: str | None) -> list[str] | None:
+    if not value:
+        return None
     return [part.strip() for part in value.split(",") if part.strip()]
 
 
@@ -72,6 +79,18 @@ def build_parser() -> argparse.ArgumentParser:
     render.add_argument("--report", default="synthetic_openfoam_problem_report.html")
     render.add_argument("--frames", type=int, default=36)
     render.add_argument("--fps", type=int, default=12)
+    render.add_argument("--task-ids", help="Comma-separated task ids to render")
+    render.add_argument("--include-physical", action="store_true", help="Also render physical OpenFOAM mesh/field videos")
+    render.add_argument("--physical-assets-dir", default="synthetic_openfoam_pipeline/physical_renders")
+    render.add_argument("--physical-runner", choices=["auto", "local", "docker", "mesh"], default="auto")
+    render.add_argument("--physical-timeout-sec", type=int, default=900)
+    render.add_argument("--physical-render-end-time", type=float, default=250.0)
+    render.add_argument("--physical-render-write-interval", type=float, default=5.0)
+    render.add_argument("--no-physical-mesh-fallback", action="store_true")
+    render.add_argument("--current-only", action="store_true", help="Prune report cards to only tasks from --tasks-root")
+    render.add_argument("--vercel-report", default="vercel-openfoam-report/index.html")
+    render.add_argument("--vercel-assets-dir", default="vercel-openfoam-report/synthetic_openfoam_pipeline/physical_renders")
+    render.add_argument("--no-vercel-sync", action="store_true", help="Do not copy physical videos into the Vercel report project")
     return parser
 
 
@@ -85,6 +104,27 @@ def _problem_config(args) -> dict:
         "mirror_problems_root_override": mirror_problems_root,
         "use_template_problems": problems_root is None,
     }
+
+
+def copy_render_assets(renders: list[ProblemRender], assets_dir: Path) -> list[ProblemRender]:
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    copied = []
+    for render in renders:
+        target = assets_dir / render.path.name
+        shutil.copy2(render.path, target)
+        copied.append(
+            ProblemRender(
+                task_id=render.task_id,
+                family=render.family,
+                title=render.title,
+                path=target,
+                caption=render.caption,
+                marker=render.marker,
+                label=render.label,
+                aria_label_suffix=render.aria_label_suffix,
+            )
+        )
+    return copied
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -168,12 +208,64 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if all(c.status.value != "rejected" for c in result.candidates) else 1
 
     if args.command == "render-report":
-        renders = render_all(Path(args.tasks_root), Path(args.assets_dir), frames=args.frames, fps=args.fps)
-        update_report(Path(args.report), renders, Path(args.assets_dir))
+        tasks_root = Path(args.tasks_root)
+        task_ids = _task_ids(args.task_ids)
+        renders = render_all(
+            tasks_root,
+            Path(args.assets_dir),
+            task_ids=task_ids,
+            frames=args.frames,
+            fps=args.fps,
+            skip_missing=args.include_physical,
+        )
+        update_report(
+            Path(args.report),
+            renders,
+            Path(args.assets_dir),
+            tasks_root=tasks_root,
+            ensure_cards=bool(renders),
+            current_only=args.current_only,
+        )
+        physical_renders: list[ProblemRender] = []
+        vercel_renders: list[ProblemRender] = []
+        if args.include_physical:
+            physical_renders = render_all_physical(
+                tasks_root,
+                Path(args.physical_assets_dir),
+                task_ids=task_ids,
+                frames=args.frames,
+                fps=args.fps,
+                runner=args.physical_runner,
+                timeout_sec=args.physical_timeout_sec,
+                fallback_to_mesh=not args.no_physical_mesh_fallback,
+                render_end_time=args.physical_render_end_time,
+                render_write_interval=args.physical_render_write_interval,
+            )
+            update_report(
+                Path(args.report),
+                physical_renders,
+                Path(args.physical_assets_dir),
+                tasks_root=tasks_root,
+                ensure_cards=True,
+                current_only=args.current_only,
+            )
+            vercel_report = Path(args.vercel_report)
+            if not args.no_vercel_sync and vercel_report.exists():
+                vercel_renders = copy_render_assets(physical_renders, Path(args.vercel_assets_dir))
+                update_report(
+                    vercel_report,
+                    vercel_renders,
+                    Path(args.vercel_assets_dir),
+                    tasks_root=tasks_root,
+                    ensure_cards=True,
+                    current_only=args.current_only,
+                )
         print(
             json.dumps(
                 {
                     "rendered": [str(render.path) for render in renders],
+                    "physical_rendered": [str(render.path) for render in physical_renders],
+                    "vercel_physical_rendered": [str(render.path) for render in vercel_renders],
                     "report": str(Path(args.report)),
                 },
                 indent=2,

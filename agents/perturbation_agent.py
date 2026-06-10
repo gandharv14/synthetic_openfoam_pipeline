@@ -7,8 +7,10 @@ from pathlib import Path
 
 from synthetic_openfoam_pipeline.agents.skill_mapper_agent import SkillMapperAgent
 from synthetic_openfoam_pipeline.openfoam.case_model import write_seed_case
+from synthetic_openfoam_pipeline.openfoam.evidence import collect_symptom_evidence
 from synthetic_openfoam_pipeline.schemas import ForbiddenEdit, TaskCandidate
 from synthetic_openfoam_pipeline.task_families.common import (
+    SYMPTOM_EVIDENCE_PLACEHOLDER,
     apply_oracle_marker,
     apply_starter_perturbation,
     select_hidden_variants,
@@ -41,6 +43,11 @@ class PerturbationAgent:
         apply_starter_perturbation(starter_dir, definition)
         apply_oracle_marker(oracle_dir, definition)
 
+        # Run the broken starter once and embed the diagnostic excerpt as the
+        # public symptom evidence; the agent diagnoses from logs, not titles.
+        evidence = collect_symptom_evidence(starter_dir)
+        prompt = definition.prompt.replace(SYMPTOM_EVIDENCE_PLACEHOLDER, evidence["excerpt"])
+
         forbidden = [
             ForbiddenEdit(path=edit.path, sha256=sha256_file(starter_dir / edit.path), description=edit.description)
             for edit in definition.task_spec.forbidden_edits
@@ -57,7 +64,7 @@ class PerturbationAgent:
             hidden_variants=hidden_variants,
             expected_metrics=expected,
             forbidden_edits=forbidden,
-            prompt=definition.prompt,
+            prompt=prompt,
             rationale=definition.rationale,
             starter_case_dir=starter_dir,
             oracle_case_dir=oracle_dir,
@@ -65,6 +72,7 @@ class PerturbationAgent:
             generation_report={
                 "family_title": definition.title,
                 "symptom": definition.symptom,
+                "symptom_evidence": evidence,
                 "expected_metrics": asdict(expected),
                 "hidden_variant_axes": hidden_variant_axes,
                 "hidden_variant_count": len(hidden_variants),

@@ -1,0 +1,142 @@
+{
+  "expected_metrics": {
+    "mass_balance_max": 0.002,
+    "postprocessing_required": [
+      "residuals",
+      "probes"
+    ],
+    "pressure_drop_max": 5.0,
+    "pressure_drop_min": 0.05,
+    "residual_max": 0.0001,
+    "source_target": null,
+    "tolerance": 0.05
+  },
+  "family": "flow_rate_targeting",
+  "forbidden_edits": [
+    {
+      "description": "Must preserve physical input",
+      "path": "constant/transportProperties",
+      "sha256": "9be7e9acaa702482805a26b1332a3b4cffaf8aec4c109cf98093b7a3bcba6b54"
+    },
+    {
+      "description": "Must preserve physical input",
+      "path": "system/blockMeshDict",
+      "sha256": "ad108787e9cfa8587d17e16d3b6a0c8361deb1457f61cd85d6d5a2d538c79fcd"
+    },
+    {
+      "description": "Must preserve physical input",
+      "path": "0/p",
+      "sha256": "d2cef69354c4c4b61191c593f5c93b4d26eb1a6f8e7e2b093a62ab90bc48beff"
+    }
+  ],
+  "generation_report": {
+    "claude_hard_rationale": "Likely Claude-hard because the visible case runs, but hidden inlet-speed and viscosity variants require preserving the intended flow-control boundary rather than compensating elsewhere.",
+    "expected_metrics": {
+      "mass_balance_max": 0.002,
+      "postprocessing_required": [
+        "residuals",
+        "probes"
+      ],
+      "pressure_drop_max": 5.0,
+      "pressure_drop_min": 0.05,
+      "residual_max": 0.0001,
+      "source_target": null,
+      "tolerance": 0.05
+    },
+    "family_title": "Flow-rate targeting",
+    "hidden_variant_axes": [
+      "inlet_velocity",
+      "viscosity"
+    ],
+    "hidden_variant_count": 4,
+    "hidden_variant_grid_size": 16,
+    "metric_anchor_summary": {
+      "mode": "openfoam-precomputed",
+      "variant_count": 4,
+      "version": 1
+    },
+    "oracle_strategy": "Extract starter_case.tar.gz, apply the family-specific OpenFOAM dictionary repair, then package the corrected case as /tmp/output/fixed_case.tar.gz.",
+    "prompt_rewrite": {
+      "model": null,
+      "reason": "prompt rewriting disabled by config",
+      "status": "disabled"
+    },
+    "symptom": "The case is stable but the inlet flow target is set far below the documented operating point."
+  },
+  "hidden_variant_axes": [
+    "inlet_velocity",
+    "viscosity"
+  ],
+  "hidden_variants": [
+    {
+      "changes": {
+        "inlet_velocity": 1.6,
+        "viscosity": 0.016
+      },
+      "expected_overrides": {},
+      "name": "private_variant_01"
+    },
+    {
+      "changes": {
+        "inlet_velocity": 1.15,
+        "viscosity": 0.0065
+      },
+      "expected_overrides": {},
+      "name": "private_variant_02"
+    },
+    {
+      "changes": {
+        "inlet_velocity": 1.15,
+        "viscosity": 0.0125
+      },
+      "expected_overrides": {},
+      "name": "private_variant_03"
+    },
+    {
+      "changes": {
+        "inlet_velocity": 1.15,
+        "viscosity": 0.016
+      },
+      "expected_overrides": {},
+      "name": "private_variant_04"
+    }
+  ],
+  "output_contract": "/tmp/output/fixed_case.tar.gz",
+  "rationale": "Likely Claude-hard because the visible case runs, but hidden inlet-speed and viscosity variants require preserving the intended flow-control boundary rather than compensating elsewhere.",
+  "seed": 20260612,
+  "seed_case": {
+    "case_kind": "channel",
+    "compatible_families": [
+      "boundary_condition_repair",
+      "solver_convergence_repair",
+      "flow_rate_targeting",
+      "pressure_drop_calibration",
+      "transient_setup_repair",
+      "mesh_resolution_tradeoff"
+    ],
+    "parameters": {
+      "inlet_velocity": 1.0,
+      "viscosity": 0.01
+    },
+    "runtime_estimate_sec": 30,
+    "seed_id": "laminar-channel",
+    "solver": "simpleFoam"
+  },
+  "skill_graph": {
+    "family": "flow_rate_targeting",
+    "hidden_generalization_axes": [
+      "inlet velocity",
+      "viscosity",
+      "write interval",
+      "probe location",
+      "source strength",
+      "mesh grading"
+    ],
+    "requires_multi_file_consistency": true,
+    "skills": []
+  },
+  "status": "candidate",
+  "task_dir": "lbx-rl-tasks-iso-template/problems/openfoam-flow-rate-a733a0f2",
+  "task_id": "openfoam-flow-rate-a733a0f2",
+  "zip_path": null
+}

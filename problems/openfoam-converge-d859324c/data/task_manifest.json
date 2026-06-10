@@ -1,4 +1,0 @@
-{
-  "public_note": "Repair the OpenFOAM case described in the instruction. Private validation variants and expected metrics are held by the scorer.",
-  "task_id": "openfoam-converge-d859324c"
-}

@@ -1,7 +1,0 @@
-{
-  "benchmark": "taiga_task",
-  "problem_data": {
-    "description": "checkMesh reports avoidable quality issues from a subtle block grading problem.",
-    "instance_id": "openfoam-mesh-f76089f7"
-  }
-}

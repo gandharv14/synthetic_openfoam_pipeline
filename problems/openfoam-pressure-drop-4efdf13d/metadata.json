@@ -1,0 +1,7 @@
+{
+  "benchmark": "taiga_task",
+  "problem_data": {
+    "description": "The channel reports a biased pressure drop because the outlet pressure datum was shifted.",
+    "instance_id": "openfoam-pressure-drop-4efdf13d"
+  }
+}

@@ -1,0 +1,327 @@
+{
+  "by_variant": {
+    "private_variant_01": {
+      "baseline": {
+        "anchor_comparison": {
+          "present": false
+        },
+        "continuity_window": {
+          "count": 20.0,
+          "last": 3.14926e-07,
+          "max": 2.56497e-06
+        },
+        "flow_rate": 0.1,
+        "inlet_area": 0.1,
+        "mass_balance": 0.000361267,
+        "mesh_cells": 200,
+        "mesh_grading": 1.5,
+        "residual": 0.0851377,
+        "residual_window": {
+          "count": 20.0,
+          "last": 9.71933e-07,
+          "max": 1.09818e-05
+        },
+        "source_strength": -1.0,
+        "target_flow_rate": 0.16000000000000003
+      },
+      "baseline_status": {
+        "mesh_ok": true,
+        "metrics_ok": false,
+        "ok": false,
+        "post_ok": true,
+        "reason": "real-openfoam",
+        "solver_ok": true
+      },
+      "changes": {
+        "inlet_velocity": 1.6,
+        "viscosity": 0.016
+      },
+      "oracle": {
+        "anchor_comparison": {
+          "present": false
+        },
+        "continuity_window": {
+          "count": 20.0,
+          "last": 3.14926e-07,
+          "max": 2.56497e-06
+        },
+        "flow_rate": 0.1,
+        "inlet_area": 0.1,
+        "mass_balance": 0.000361267,
+        "mesh_cells": 200,
+        "mesh_grading": 1.5,
+        "residual": 0.0851377,
+        "residual_window": {
+          "count": 20.0,
+          "last": 9.71933e-07,
+          "max": 1.09818e-05
+        },
+        "source_strength": -1.0,
+        "target_flow_rate": 0.16000000000000003
+      },
+      "oracle_status": {
+        "mesh_ok": true,
+        "metrics_ok": false,
+        "ok": false,
+        "post_ok": true,
+        "reason": "real-openfoam",
+        "solver_ok": true
+      },
+      "tolerances": {
+        "flow_rate": 0.1,
+        "force_Cd": 1.0,
+        "force_Cl": 1.0,
+        "mesh_cells": 0.0,
+        "mesh_grading": 0.05,
+        "pressure_drop": 0.5,
+        "scalar_average": 0.25,
+        "source_response": 0.75,
+        "source_strength": 0.05,
+        "write_interval": 0.0
+      }
+    },
+    "private_variant_02": {
+      "baseline": {
+        "anchor_comparison": {
+          "present": false
+        },
+        "continuity_window": {
+          "count": 20.0,
+          "last": 2.31379e-07,
+          "max": 1.63189e-06
+        },
+        "flow_rate": 0.1,
+        "inlet_area": 0.1,
+        "mass_balance": 0.000293164,
+        "mesh_cells": 200,
+        "mesh_grading": 1.5,
+        "residual": 0.0675489,
+        "residual_window": {
+          "count": 20.0,
+          "last": 8.48551e-07,
+          "max": 6.95369e-06
+        },
+        "source_strength": -1.0,
+        "target_flow_rate": 0.11499999999999999
+      },
+      "baseline_status": {
+        "mesh_ok": true,
+        "metrics_ok": false,
+        "ok": false,
+        "post_ok": true,
+        "reason": "real-openfoam",
+        "solver_ok": true
+      },
+      "changes": {
+        "inlet_velocity": 1.15,
+        "viscosity": 0.0065
+      },
+      "oracle": {
+        "anchor_comparison": {
+          "present": false
+        },
+        "continuity_window": {
+          "count": 20.0,
+          "last": 2.31379e-07,
+          "max": 1.63189e-06
+        },
+        "flow_rate": 0.1,
+        "inlet_area": 0.1,
+        "mass_balance": 0.000293164,
+        "mesh_cells": 200,
+        "mesh_grading": 1.5,
+        "residual": 0.0675489,
+        "residual_window": {
+          "count": 20.0,
+          "last": 8.48551e-07,
+          "max": 6.95369e-06
+        },
+        "source_strength": -1.0,
+        "target_flow_rate": 0.11499999999999999
+      },
+      "oracle_status": {
+        "mesh_ok": true,
+        "metrics_ok": false,
+        "ok": false,
+        "post_ok": true,
+        "reason": "real-openfoam",
+        "solver_ok": true
+      },
+      "tolerances": {
+        "flow_rate": 0.1,
+        "force_Cd": 1.0,
+        "force_Cl": 1.0,
+        "mesh_cells": 0.0,
+        "mesh_grading": 0.05,
+        "pressure_drop": 0.5,
+        "scalar_average": 0.25,
+        "source_response": 0.75,
+        "source_strength": 0.05,
+        "write_interval": 0.0
+      }
+    },
+    "private_variant_03": {
+      "baseline": {
+        "anchor_comparison": {
+          "present": false
+        },
+        "continuity_window": {
+          "count": 20.0,
+          "last": 3.14926e-07,
+          "max": 2.56497e-06
+        },
+        "flow_rate": 0.1,
+        "inlet_area": 0.1,
+        "mass_balance": 0.000361267,
+        "mesh_cells": 200,
+        "mesh_grading": 1.5,
+        "residual": 0.0851377,
+        "residual_window": {
+          "count": 20.0,
+          "last": 9.71933e-07,
+          "max": 1.09818e-05
+        },
+        "source_strength": -1.0,
+        "target_flow_rate": 0.11499999999999999
+      },
+      "baseline_status": {
+        "mesh_ok": true,
+        "metrics_ok": false,
+        "ok": false,
+        "post_ok": true,
+        "reason": "real-openfoam",
+        "solver_ok": true
+      },
+      "changes": {
+        "inlet_velocity": 1.15,
+        "viscosity": 0.0125
+      },
+      "oracle": {
+        "anchor_comparison": {
+          "present": false
+        },
+        "continuity_window": {
+          "count": 20.0,
+          "last": 3.14926e-07,
+          "max": 2.56497e-06
+        },
+        "flow_rate": 0.1,
+        "inlet_area": 0.1,
+        "mass_balance": 0.000361267,
+        "mesh_cells": 200,
+        "mesh_grading": 1.5,
+        "residual": 0.0851377,
+        "residual_window": {
+          "count": 20.0,
+          "last": 9.71933e-07,
+          "max": 1.09818e-05
+        },
+        "source_strength": -1.0,
+        "target_flow_rate": 0.11499999999999999
+      },
+      "oracle_status": {
+        "mesh_ok": true,
+        "metrics_ok": false,
+        "ok": false,
+        "post_ok": true,
+        "reason": "real-openfoam",
+        "solver_ok": true
+      },
+      "tolerances": {
+        "flow_rate": 0.1,
+        "force_Cd": 1.0,
+        "force_Cl": 1.0,
+        "mesh_cells": 0.0,
+        "mesh_grading": 0.05,
+        "pressure_drop": 0.5,
+        "scalar_average": 0.25,
+        "source_response": 0.75,
+        "source_strength": 0.05,
+        "write_interval": 0.0
+      }
+    },
+    "private_variant_04": {
+      "baseline": {
+        "anchor_comparison": {
+          "present": false
+        },
+        "continuity_window": {
+          "count": 20.0,
+          "last": 3.14926e-07,
+          "max": 2.56497e-06
+        },
+        "flow_rate": 0.1,
+        "inlet_area": 0.1,
+        "mass_balance": 0.000361267,
+        "mesh_cells": 200,
+        "mesh_grading": 1.5,
+        "residual": 0.0851377,
+        "residual_window": {
+          "count": 20.0,
+          "last": 9.71933e-07,
+          "max": 1.09818e-05
+        },
+        "source_strength": -1.0,
+        "target_flow_rate": 0.11499999999999999
+      },
+      "baseline_status": {
+        "mesh_ok": true,
+        "metrics_ok": false,
+        "ok": false,
+        "post_ok": true,
+        "reason": "real-openfoam",
+        "solver_ok": true
+      },
+      "changes": {
+        "inlet_velocity": 1.15,
+        "viscosity": 0.016
+      },
+      "oracle": {
+        "anchor_comparison": {
+          "present": false
+        },
+        "continuity_window": {
+          "count": 20.0,
+          "last": 3.14926e-07,
+          "max": 2.56497e-06
+        },
+        "flow_rate": 0.1,
+        "inlet_area": 0.1,
+        "mass_balance": 0.000361267,
+        "mesh_cells": 200,
+        "mesh_grading": 1.5,
+        "residual": 0.0851377,
+        "residual_window": {
+          "count": 20.0,
+          "last": 9.71933e-07,
+          "max": 1.09818e-05
+        },
+        "source_strength": -1.0,
+        "target_flow_rate": 0.11499999999999999
+      },
+      "oracle_status": {
+        "mesh_ok": true,
+        "metrics_ok": false,
+        "ok": false,
+        "post_ok": true,
+        "reason": "real-openfoam",
+        "solver_ok": true
+      },
+      "tolerances": {
+        "flow_rate": 0.1,
+        "force_Cd": 1.0,
+        "force_Cl": 1.0,
+        "mesh_cells": 0.0,
+        "mesh_grading": 0.05,
+        "pressure_drop": 0.5,
+        "scalar_average": 0.25,
+        "source_response": 0.75,
+        "source_strength": 0.05,
+        "write_interval": 0.0
+      }
+    }
+  },
+  "family": "flow_rate_targeting",
+  "mode": "openfoam-precomputed",
+  "version": 1
+}

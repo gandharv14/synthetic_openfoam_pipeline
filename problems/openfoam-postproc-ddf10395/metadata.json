@@ -1,7 +1,0 @@
-{
-  "benchmark": "taiga_task",
-  "problem_data": {
-    "description": "The case solves but produces no residual, probe, flux, or field extrema evidence for review.",
-    "instance_id": "openfoam-postproc-ddf10395"
-  }
-}

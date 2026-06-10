@@ -1,0 +1,7 @@
+{
+  "benchmark": "taiga_task",
+  "problem_data": {
+    "description": "The run-control dictionary stops too early and writes too sparsely for deterministic validation.",
+    "instance_id": "openfoam-transient-2d2deab6"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "benchmark": "taiga_task",
+  "problem_data": {
+    "description": "The case is stable but the inlet flow target is set far below the documented operating point.",
+    "instance_id": "openfoam-flow-rate-a733a0f2"
+  }
+}

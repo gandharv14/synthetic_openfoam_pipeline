@@ -1,0 +1,7 @@
+{
+  "benchmark": "taiga_task",
+  "problem_data": {
+    "description": "The case solves but lacks deterministic force-coefficient outputs needed for review.",
+    "instance_id": "openfoam-force-coeff-c0ecb644"
+  }
+}

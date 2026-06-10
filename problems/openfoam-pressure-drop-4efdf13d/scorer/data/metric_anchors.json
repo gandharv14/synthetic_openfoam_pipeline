@@ -1,0 +1,311 @@
+{
+  "by_variant": {
+    "private_variant_01": {
+      "baseline": {
+        "anchor_comparison": {
+          "present": false
+        },
+        "continuity_window": {
+          "count": 20.0,
+          "last": 3.12502e-07,
+          "max": 2.5902e-06
+        },
+        "mass_balance": 0.0114043,
+        "mesh_cells": 200,
+        "mesh_grading": 1.5,
+        "pressure_drop": 0.73596,
+        "residual": 0.0497426,
+        "residual_window": {
+          "count": 20.0,
+          "last": 9.6449e-07,
+          "max": 9.51044e-06
+        },
+        "source_strength": -1.0
+      },
+      "baseline_status": {
+        "mesh_ok": true,
+        "metrics_ok": false,
+        "ok": false,
+        "post_ok": true,
+        "reason": "real-openfoam",
+        "solver_ok": true
+      },
+      "changes": {
+        "inlet_velocity": 1.15,
+        "viscosity": 0.016
+      },
+      "oracle": {
+        "anchor_comparison": {
+          "present": false
+        },
+        "continuity_window": {
+          "count": 20.0,
+          "last": 3.14926e-07,
+          "max": 2.56497e-06
+        },
+        "mass_balance": 0.000361267,
+        "mesh_cells": 200,
+        "mesh_grading": 1.5,
+        "pressure_drop": 0.735935,
+        "residual": 0.0851377,
+        "residual_window": {
+          "count": 20.0,
+          "last": 9.71933e-07,
+          "max": 1.09818e-05
+        },
+        "source_strength": -1.0
+      },
+      "oracle_status": {
+        "mesh_ok": true,
+        "metrics_ok": false,
+        "ok": false,
+        "post_ok": true,
+        "reason": "real-openfoam",
+        "solver_ok": true
+      },
+      "tolerances": {
+        "flow_rate": 0.1,
+        "force_Cd": 1.0,
+        "force_Cl": 1.0,
+        "mesh_cells": 0.0,
+        "mesh_grading": 0.05,
+        "pressure_drop": 0.5,
+        "scalar_average": 0.25,
+        "source_response": 0.75,
+        "source_strength": 0.05,
+        "write_interval": 0.0
+      }
+    },
+    "private_variant_02": {
+      "baseline": {
+        "anchor_comparison": {
+          "present": false
+        },
+        "continuity_window": {
+          "count": 20.0,
+          "last": 3.12502e-07,
+          "max": 2.5902e-06
+        },
+        "mass_balance": 0.0114043,
+        "mesh_cells": 200,
+        "mesh_grading": 1.5,
+        "pressure_drop": 0.73596,
+        "residual": 0.0497426,
+        "residual_window": {
+          "count": 20.0,
+          "last": 9.6449e-07,
+          "max": 9.51044e-06
+        },
+        "source_strength": -1.0
+      },
+      "baseline_status": {
+        "mesh_ok": true,
+        "metrics_ok": false,
+        "ok": false,
+        "post_ok": true,
+        "reason": "real-openfoam",
+        "solver_ok": true
+      },
+      "changes": {
+        "inlet_velocity": 1.6,
+        "viscosity": 0.016
+      },
+      "oracle": {
+        "anchor_comparison": {
+          "present": false
+        },
+        "continuity_window": {
+          "count": 20.0,
+          "last": 3.14926e-07,
+          "max": 2.56497e-06
+        },
+        "mass_balance": 0.000361267,
+        "mesh_cells": 200,
+        "mesh_grading": 1.5,
+        "pressure_drop": 0.735935,
+        "residual": 0.0851377,
+        "residual_window": {
+          "count": 20.0,
+          "last": 9.71933e-07,
+          "max": 1.09818e-05
+        },
+        "source_strength": -1.0
+      },
+      "oracle_status": {
+        "mesh_ok": true,
+        "metrics_ok": false,
+        "ok": false,
+        "post_ok": true,
+        "reason": "real-openfoam",
+        "solver_ok": true
+      },
+      "tolerances": {
+        "flow_rate": 0.1,
+        "force_Cd": 1.0,
+        "force_Cl": 1.0,
+        "mesh_cells": 0.0,
+        "mesh_grading": 0.05,
+        "pressure_drop": 0.5,
+        "scalar_average": 0.25,
+        "source_response": 0.75,
+        "source_strength": 0.05,
+        "write_interval": 0.0
+      }
+    },
+    "private_variant_03": {
+      "baseline": {
+        "anchor_comparison": {
+          "present": false
+        },
+        "continuity_window": {
+          "count": 20.0,
+          "last": 2.05004e-07,
+          "max": 1.7727e-06
+        },
+        "mass_balance": 0.0118779,
+        "mesh_cells": 200,
+        "mesh_grading": 1.5,
+        "pressure_drop": 0.6263700000000001,
+        "residual": 0.0414678,
+        "residual_window": {
+          "count": 20.0,
+          "last": 8.64259e-07,
+          "max": 6.37123e-06
+        },
+        "source_strength": -1.0
+      },
+      "baseline_status": {
+        "mesh_ok": true,
+        "metrics_ok": false,
+        "ok": false,
+        "post_ok": true,
+        "reason": "real-openfoam",
+        "solver_ok": true
+      },
+      "changes": {
+        "inlet_velocity": 1.35,
+        "viscosity": 0.008
+      },
+      "oracle": {
+        "anchor_comparison": {
+          "present": false
+        },
+        "continuity_window": {
+          "count": 20.0,
+          "last": 2.57887e-07,
+          "max": 1.97674e-06
+        },
+        "mass_balance": 0.000337204,
+        "mesh_cells": 200,
+        "mesh_grading": 1.5,
+        "pressure_drop": 0.626336,
+        "residual": 0.0776907,
+        "residual_window": {
+          "count": 20.0,
+          "last": 8.54596e-07,
+          "max": 7.76871e-06
+        },
+        "source_strength": -1.0
+      },
+      "oracle_status": {
+        "mesh_ok": true,
+        "metrics_ok": false,
+        "ok": false,
+        "post_ok": true,
+        "reason": "real-openfoam",
+        "solver_ok": true
+      },
+      "tolerances": {
+        "flow_rate": 0.1,
+        "force_Cd": 1.0,
+        "force_Cl": 1.0,
+        "mesh_cells": 0.0,
+        "mesh_grading": 0.05,
+        "pressure_drop": 0.5,
+        "scalar_average": 0.25,
+        "source_response": 0.75,
+        "source_strength": 0.05,
+        "write_interval": 0.0
+      }
+    },
+    "private_variant_04": {
+      "baseline": {
+        "anchor_comparison": {
+          "present": false
+        },
+        "continuity_window": {
+          "count": 20.0,
+          "last": 2.12115e-07,
+          "max": 2.46085e-06
+        },
+        "mass_balance": 0.0130417,
+        "mesh_cells": 200,
+        "mesh_grading": 1.5,
+        "pressure_drop": 0.39737,
+        "residual": 0.0491961,
+        "residual_window": {
+          "count": 20.0,
+          "last": 8.99089e-07,
+          "max": 5.24334e-06
+        },
+        "source_strength": -1.0
+      },
+      "baseline_status": {
+        "mesh_ok": true,
+        "metrics_ok": false,
+        "ok": false,
+        "post_ok": true,
+        "reason": "real-openfoam",
+        "solver_ok": true
+      },
+      "changes": {
+        "inlet_velocity": 0.75,
+        "viscosity": 0.008
+      },
+      "oracle": {
+        "anchor_comparison": {
+          "present": false
+        },
+        "continuity_window": {
+          "count": 20.0,
+          "last": 1.76218e-07,
+          "max": 1.67223e-06
+        },
+        "mass_balance": 0.00080456,
+        "mesh_cells": 200,
+        "mesh_grading": 1.5,
+        "pressure_drop": 0.397351,
+        "residual": 0.0684986,
+        "residual_window": {
+          "count": 20.0,
+          "last": 7.46848e-07,
+          "max": 1.05092e-05
+        },
+        "source_strength": -1.0
+      },
+      "oracle_status": {
+        "mesh_ok": true,
+        "metrics_ok": false,
+        "ok": false,
+        "post_ok": true,
+        "reason": "real-openfoam",
+        "solver_ok": true
+      },
+      "tolerances": {
+        "flow_rate": 0.1,
+        "force_Cd": 1.0,
+        "force_Cl": 1.0,
+        "mesh_cells": 0.0,
+        "mesh_grading": 0.05,
+        "pressure_drop": 0.5,
+        "scalar_average": 0.25,
+        "source_response": 0.75,
+        "source_strength": 0.05,
+        "write_interval": 0.0
+      }
+    }
+  },
+  "family": "pressure_drop_calibration",
+  "mode": "openfoam-precomputed",
+  "version": 1
+}

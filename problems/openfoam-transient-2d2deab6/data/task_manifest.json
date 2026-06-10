@@ -1,0 +1,9 @@
+{
+  "hidden_variant_axes": [
+    "write_interval",
+    "inlet_velocity"
+  ],
+  "hidden_variant_count": 4,
+  "public_note": "Repair the OpenFOAM case described in the instruction. Private validation variants and expected metrics are held by the scorer.",
+  "task_id": "openfoam-transient-2d2deab6"
+}

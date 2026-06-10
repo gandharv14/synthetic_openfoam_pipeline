@@ -1,7 +1,0 @@
-{
-  "benchmark": "taiga_task",
-  "problem_data": {
-    "description": "The case diverges under the fixed verifier budget after a scheme/tolerance change.",
-    "instance_id": "openfoam-converge-d859324c"
-  }
-}
