@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass, field
@@ -21,7 +22,13 @@ class OpenFoamRunResult:
 
 
 class OpenFoamRunner:
-    STAGES = (("mesh", "blockMesh"), ("checkMesh", "checkMesh"), ("solve", "simpleFoam"))
+    @staticmethod
+    def application(case_dir: Path) -> str:
+        """Solver named in the case's controlDict (not hardcoded)."""
+        control = case_dir / "system" / "controlDict"
+        text = control.read_text() if control.exists() else ""
+        match = re.search(r"\bapplication\s+([A-Za-z0-9_]+)\s*;", text)
+        return match.group(1) if match else "simpleFoam"
 
     def run_case(self, case_dir: Path, timeout: int = 120) -> OpenFoamRunResult:
         if shutil.which("blockMesh") is None:
@@ -30,7 +37,11 @@ class OpenFoamRunner:
         # (host installs put the tools directly on PATH).
         env = "source /etc/solver-envs.d/openfoam.sh >/dev/null 2>&1"
         logs: dict[str, str] = {}
-        for name, tool in self.STAGES:
+        stages = [("mesh", "blockMesh")]
+        if (case_dir / "system" / "snappyHexMeshDict").exists():
+            stages.append(("snappy", "snappyHexMesh -overwrite"))
+        stages.extend([("checkMesh", "checkMesh"), ("solve", self.application(case_dir))])
+        for name, tool in stages:
             try:
                 result = run_command(["bash", "-lc", f"{env}; {tool} -case {case_dir}"], timeout=timeout)
             except subprocess.TimeoutExpired:

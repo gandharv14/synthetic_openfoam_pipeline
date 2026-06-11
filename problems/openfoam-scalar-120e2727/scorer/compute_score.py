@@ -41,7 +41,10 @@ def compute_score(workspace: Path, trajectory: list[dict[str, Any]] | None, priv
     criteria: list[dict[str, Any]] = []
     metadata: dict[str, Any] = {"runner": "real-openfoam"}
 
-    hidden_variants = load_json(private / "hidden_variants.json", []) or []
+    hidden_payload = load_json(private / "hidden_variants.json", []) or []
+    # Per-task derived grids ship as {"axes", "derived_grid", "variants"};
+    # legacy payloads are a bare variant list.
+    hidden_variants = hidden_payload.get("variants") or [] if isinstance(hidden_payload, dict) else hidden_payload
     expected = load_json(private / "expected_metrics.json", {}) or {}
     metric_anchors = load_json(private / "metric_anchors.json", {}) or {}
     forbidden = load_json(private / "forbidden_edits.json", []) or []

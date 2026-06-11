@@ -35,7 +35,7 @@ def generate_candidates(config: PipelineConfig) -> list[TaskCandidate]:
     if work_root.exists():
         shutil.rmtree(work_root)
     ensure_dir(work_root, allow_template_output=config.allow_template_output)
-    perturb = PerturbationAgent()
+    perturb = PerturbationAgent(difficulty=config.difficulty)
     oracle = OracleBuilderAgent()
     anchors = AnchorPrecomputeAgent()
     prompt_writer = PromptWriterAgent(model=config.prompt_rewrite_model) if config.prompt_rewrite_enabled else None

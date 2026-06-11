@@ -80,9 +80,20 @@ class LbxTaskExporter:
             },
             allow_template_output=template_write_root,
         )
+        derived_grid: dict[str, list] = {}
+        grid_source = candidate.task_spec.hidden_variant_grid if candidate.task_spec else candidate.hidden_variants
+        for variant in grid_source:
+            for axis, value in variant.changes.items():
+                bucket = derived_grid.setdefault(axis, [])
+                if value not in bucket:
+                    bucket.append(value)
         write_json(
             task_dir / "scorer" / "data" / "hidden_variants.json",
-            [asdict(v) for v in candidate.hidden_variants],
+            {
+                "axes": candidate.hidden_variant_axes,
+                "derived_grid": derived_grid,
+                "variants": [asdict(v) for v in candidate.hidden_variants],
+            },
             allow_template_output=template_write_root,
         )
         write_json(
@@ -107,7 +118,16 @@ class LbxTaskExporter:
         (task_dir / "scorer" / "openfoam_grader_lib.py").write_text(self.grader.grader_lib_source())
 
         marker = {"repair_state": "oracle", "family": candidate.family, "task_id": candidate.task_id}
-        (task_dir / "solution" / "solve.sh").write_text(solution_script(candidate.task_id, candidate.family, marker))
+        (task_dir / "solution" / "solve.sh").write_text(
+            solution_script(
+                candidate.task_id,
+                candidate.family,
+                marker,
+                candidate.seed_case.parameters,
+                families=candidate.corruption_families or [candidate.family],
+                case_kind=candidate.seed_case.case_kind,
+            )
+        )
         (task_dir / "solution" / "solution_notes.md").write_text(self._solution_notes(candidate))
         (task_dir / "solution" / "render.sh").write_text(render_script())
         (task_dir / "baselines" / "naive.sh").write_text(naive_script())
@@ -224,6 +244,8 @@ class LbxTaskExporter:
 
             expected_base = json.loads((problem / "scorer" / "data" / "expected_metrics.json").read_text())
             variants = json.loads((problem / "scorer" / "data" / "hidden_variants.json").read_text())
+            if isinstance(variants, dict):
+                variants = variants.get("variants") or []
 
             def extract_archive(archive: Path, dest: Path) -> Path:
                 dest.mkdir(parents=True, exist_ok=True)
@@ -293,6 +315,7 @@ class LbxTaskExporter:
                         "tolerances": {
                             "flow_rate": 0.10,
                             "pressure_drop": 0.50,
+                            "outlet_pressure": 1.0,
                             "source_strength": float(expected.get("tolerance") or 0.05),
                             "source_response": 0.75,
                             "mesh_cells": 0.0,
@@ -300,7 +323,26 @@ class LbxTaskExporter:
                             "force_Cd": 1.0,
                             "force_Cl": 1.0,
                             "scalar_average": 0.25,
-                            "write_interval": 0.0
+                            "write_interval": 0.0,
+                            "turbulence_inlet_k": 0.10,
+                            "turbulence_inlet_omega": 0.10,
+                            "turbulence_inlet_epsilon": 0.10,
+                            "turbulence_k_mean": 0.75,
+                            "turbulence_wall_functions": 0.0,
+                            "mean_force_Cd": 0.35,
+                            "mean_force_Cl_mag": 1.0,
+                            "mean_probe_p_mag": 1.0,
+                            "mean_probe_U_mag": 0.35,
+                            "scalar_min": 1.0,
+                            "scalar_max": 1.0,
+                            "wall_scalar": 0.05,
+                            "scalar_outlet_mean": 1.0,
+                            "scalar_wall_heat_flux": 0.35,
+                            "mesh_cells_actual": 0.10,
+                            "mesh_nonortho_max": 0.10,
+                            "mesh_skewness_max": 0.20,
+                            "snappy_refinement_level": 0.0,
+                            "snappy_location_in_flow": 0.0
                         },
                         "oracle_status": {k: oracle_payload[k] for k in ("ok", "mesh_ok", "solver_ok", "post_ok", "metrics_ok", "reason")},
                         "baseline_status": {k: baseline_payload[k] for k in ("ok", "mesh_ok", "solver_ok", "post_ok", "metrics_ok", "reason")},

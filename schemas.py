@@ -50,6 +50,35 @@ class ExpectedMetrics:
     postprocessing_required: list[str] = field(default_factory=list)
     source_target: float | None = None
     tolerance: float = 0.05
+    # Goal-seeking targets (hash-picked at generation time). The instruction
+    # states the physical quantity; the grader measures it from the run.
+    target_inlet_velocity: float | None = None
+    target_flow_rate: float | None = None
+    outlet_pressure_target: float | None = None
+    # Turbulent RANS seeds: RAS model plus inlet turbulence state derived
+    # deterministically from the hash-picked Reynolds grid.
+    turbulence_model: str | None = None
+    turbulence_inlet_k: float | None = None
+    turbulence_inlet_omega: float | None = None
+    turbulence_inlet_epsilon: float | None = None
+    # Transient pimpleFoam seeds: fixed horizon, the start of the
+    # time-averaging window, and Courant-safety bands for grading.
+    end_time: float | None = None
+    average_window_start: float | None = None
+    max_delta_t: float | None = None
+    max_courant: float | None = None
+    # Heated seeds: the scalar actively solved by the scalarTransport
+    # functionObject and its boundary state (ambient inflow, heated patch).
+    scalar_field: str | None = None
+    scalar_ambient_value: float | None = None
+    scalar_hot_value: float | None = None
+    scalar_hot_patch: str | None = None
+    # snappyHexMesh seeds: checkMesh quality bands for the generated mesh
+    # (cell-count window plus non-orthogonality/skewness ceilings).
+    mesh_cells_min: int | None = None
+    mesh_cells_max: int | None = None
+    max_nonortho: float | None = None
+    max_skewness: float | None = None
 
 
 @dataclass(frozen=True)
@@ -117,6 +146,8 @@ class TaskCandidate:
     generation_report: dict[str, Any] = field(default_factory=dict)
     task_spec: OpenFoamTaskSpec | None = None
     metric_anchors: dict[str, Any] = field(default_factory=dict)
+    # Primary family first, then any difficulty-stacked secondary corruptions.
+    corruption_families: list[str] = field(default_factory=list)
 
     @property
     def hidden_variant_axes(self) -> list[str]:
@@ -131,6 +162,7 @@ class TaskCandidate:
         data = {
             "task_id": self.task_id,
             "family": self.family,
+            "corruption_families": list(self.corruption_families) or [self.family],
             "seed": self.seed,
             "seed_case": asdict(self.seed_case),
             "skill_graph": self.skill_graph,

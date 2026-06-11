@@ -3,6 +3,18 @@ from __future__ import annotations
 import json
 from textwrap import dedent
 
+from synthetic_openfoam_pipeline.openfoam.case_model import (
+    SCALAR_HOT_VALUE,
+    SNAPPY_LOCATION_IN_MESH,
+    SNAPPY_REFINEMENT_LEVEL,
+    TRANSIENT_DELTA_T,
+    TRANSIENT_END_TIME,
+    TRANSIENT_PIMPLE_BLOCK,
+    TURBULENCE_WALL_FUNCTIONS,
+    turbulence_inlet_values,
+    turbulence_second_field,
+)
+
 
 def task_toml(task_id: str, description: str) -> str:
     return dedent(
@@ -84,8 +96,34 @@ def dockerfile(problem_dir: str) -> str:
     ).lstrip()
 
 
-def solution_script(task_id: str, family: str, marker: dict) -> str:
+def solution_script(
+    task_id: str,
+    family: str,
+    marker: dict,
+    parameters: dict | None = None,
+    families: list[str] | None = None,
+    case_kind: str | None = None,
+) -> str:
     _ = (task_id, marker)
+    params = parameters or {}
+    # The heated patch carrying the scalar BC follows the seed geometry.
+    scalar_patch = "movingWall" if "cavity" in (case_kind or "cavity") else "walls"
+    cells_x = int(params.get("cells_x", 20))
+    cells_y = int(params.get("cells_y", 10))
+    # Goal-seeking targets live in the seed parameters; repairs restore them.
+    inlet_velocity = float(params.get("inlet_velocity", 1.0))
+    outlet_pressure = float(params.get("outlet_pressure", 0.0))
+    source_strength = float(params.get("source_strength", 0.2))
+    # Turbulent RANS seeds: the consistent boundary state is derived from the
+    # same hash-picked Reynolds grid used at seed-generation time.
+    turbulence_model = str(params.get("turbulence_model", "kOmegaSST"))
+    turbulence = turbulence_inlet_values(params)
+    turbulence_second = turbulence_second_field(turbulence_model)
+    turbulence_k = f"{turbulence['k']:g}"
+    turbulence_second_value = f"{turbulence[turbulence_second]:g}"
+    turbulence_second_wall = TURBULENCE_WALL_FUNCTIONS[turbulence_second]
+    # Chain the primary repair with any difficulty-stacked secondary repairs.
+    repair_families = list(dict.fromkeys([family, *(families or [])]))
     return dedent(
         f"""\
         #!/usr/bin/env bash
@@ -256,32 +294,76 @@ def solution_script(task_id: str, family: str, marker: dict) -> str:
                 raise SystemExit(f"cell count {{old_text}} not found in {{path}}")
             path.write_text(text.replace(old_text, new_text, 1))
 
-        family = {family!r}
-        if family == "boundary_condition_repair":
-            set_patch(case / "0" / "p", "outlet", {{"type": "fixedValue", "value": "uniform 0"}})
-        elif family == "postprocessing_instrumentation":
-            set_functions(case / "system" / "controlDict", FUNCTIONS)
-        elif family == "solver_convergence_repair":
-            set_div_phi_u(case / "system" / "fvSchemes", "Gauss linearUpwind grad(U)")
-        elif family == "mesh_quality_repair":
-            set_grading(case / "system" / "blockMeshDict", 1.5)
-        elif family == "source_term_calibration":
-            set_source(case / "constant" / "fvOptions", 0.2)
-        elif family == "flow_rate_targeting":
-            set_patch(case / "0" / "U", "inlet", {{"type": "fixedValue", "value": "uniform (1 0 0)"}})
-        elif family == "pressure_drop_calibration":
-            set_patch(case / "0" / "p", "outlet", {{"type": "fixedValue", "value": "uniform 0"}})
-        elif family == "transient_setup_repair":
-            set_entry(case / "system" / "controlDict", "endTime", "100")
-            set_entry(case / "system" / "controlDict", "writeInterval", "20")
-        elif family == "force_coeff_instrumentation":
-            set_functions(case / "system" / "controlDict", FORCE_FUNCTIONS)
-        elif family == "scalar_transport_repair":
-            set_patch(case / "0" / "T", "movingWall", {{"type": "fixedValue", "value": "uniform 310"}})
-        elif family == "mesh_resolution_tradeoff":
-            set_cells(case / "system" / "blockMeshDict", (80, 40, 1), (20, 10, 1))
-        else:
-            raise SystemExit(f"unknown family: {{family}}")
+        def replace_text(path: Path, old: str, new: str) -> None:
+            text = path.read_text()
+            if old not in text:
+                raise SystemExit(f"expected text not found in {{path}}: {{old}}")
+            path.write_text(text.replace(old, new, 1))
+
+        def set_regex(path: Path, pattern: str, repl: str) -> None:
+            text = path.read_text()
+            next_text, count = re.subn(pattern, repl, text, count=1)
+            if count != 1:
+                raise SystemExit(f"pattern {{pattern}} not found in {{path}}")
+            path.write_text(next_text)
+
+        def apply_repair(family: str) -> None:
+            if family == "boundary_condition_repair":
+                set_patch(case / "0" / "p", "outlet", {{"type": "fixedValue", "value": "uniform {outlet_pressure:g}"}})
+            elif family == "postprocessing_instrumentation":
+                set_functions(case / "system" / "controlDict", FUNCTIONS)
+            elif family == "solver_convergence_repair":
+                set_div_phi_u(case / "system" / "fvSchemes", "Gauss linearUpwind grad(U)")
+            elif family == "mesh_quality_repair":
+                set_grading(case / "system" / "blockMeshDict", 1.5)
+            elif family == "source_term_calibration":
+                set_source(case / "constant" / "fvOptions", {source_strength})
+            elif family == "flow_rate_targeting":
+                set_patch(case / "0" / "U", "inlet", {{"type": "fixedValue", "value": "uniform ({inlet_velocity:g} 0 0)"}})
+            elif family == "pressure_drop_calibration":
+                set_patch(case / "0" / "p", "outlet", {{"type": "fixedValue", "value": "uniform {outlet_pressure:g}"}})
+            elif family == "transient_setup_repair":
+                set_entry(case / "system" / "controlDict", "deltaT", "{TRANSIENT_DELTA_T:g}")
+                set_entry(case / "system" / "controlDict", "endTime", "{TRANSIENT_END_TIME:g}")
+                set_regex(case / "system" / "fvSchemes", r"ddtSchemes\\s*\\{{[^}}]*\\}}", "ddtSchemes {{ default backward; }}")
+                set_regex(case / "system" / "fvSolution", r"PIMPLE\\s*\\{{[^}}]*\\}}", "{TRANSIENT_PIMPLE_BLOCK}")
+            elif family == "force_coeff_instrumentation":
+                set_functions(case / "system" / "controlDict", FORCE_FUNCTIONS)
+            elif family == "scalar_transport_repair":
+                set_patch(case / "0" / "T", "{scalar_patch}", {{"type": "fixedValue", "value": "uniform {SCALAR_HOT_VALUE:g}"}})
+            elif family == "mesh_resolution_tradeoff":
+                set_cells(case / "system" / "blockMeshDict", ({cells_x * 4}, {cells_y * 4}, 1), ({cells_x}, {cells_y}, 1))
+            elif family == "relaxation_factor_repair":
+                replace_text(
+                    case / "system" / "fvSolution",
+                    "relaxationFactors {{ fields {{ p 0.95; }} equations {{ U 0.95; }} }}",
+                    "relaxationFactors {{ fields {{ p 0.3; }} equations {{ U 0.7; }} }}",
+                )
+            elif family == "wall_patch_type_repair":
+                replace_text(case / "0" / "U", "walls {{ type slip; }}", "walls {{ type noSlip; }}")
+            elif family == "field_dimensions_repair":
+                replace_text(case / "0" / "p", "dimensions [0 1 -2 0 0 0 0];", "dimensions [0 2 -2 0 0 0 0];")
+            elif family == "residual_control_repair":
+                replace_text(
+                    case / "system" / "fvSolution",
+                    "residualControl {{ p 0.5; U 0.5; }}",
+                    "residualControl {{ p 1e-4; U 1e-4; }}",
+                )
+            elif family == "probe_placement_repair":
+                replace_text(case / "system" / "controlDict", "probeLocations ((25 5 0.05));", "probeLocations ((1 0.5 0.05));")
+            elif family == "snappy_hex_repair":
+                set_regex(case / "system" / "snappyHexMeshDict", r"\\blevel\\s+\\(\\s*\\d+\\s+\\d+\\s*\\);", "{SNAPPY_REFINEMENT_LEVEL}")
+                set_regex(case / "system" / "snappyHexMeshDict", r"\\blocationInMesh\\s+\\([^)]*\\);", "{SNAPPY_LOCATION_IN_MESH}")
+            elif family == "turbulence_bc_repair":
+                set_patch(case / "0" / "k", "walls", {{"type": "kqRWallFunction", "value": "uniform {turbulence_k}"}})
+                set_patch(case / "0" / "k", "inlet", {{"type": "fixedValue", "value": "uniform {turbulence_k}"}})
+                set_patch(case / "0" / "{turbulence_second}", "walls", {{"type": "{turbulence_second_wall}", "value": "uniform {turbulence_second_value}"}})
+                set_patch(case / "0" / "{turbulence_second}", "inlet", {{"type": "fixedValue", "value": "uniform {turbulence_second_value}"}})
+            else:
+                raise SystemExit(f"unknown family: {{family}}")
+
+        for family in {repair_families!r}:
+            apply_repair(family)
         PY
         tar -czf "${{OUT}}/fixed_case.tar.gz" -C "${{WORK}}" case
         """
@@ -562,13 +644,121 @@ def mesh_grading(case_dir: Path) -> float | None:
     return float(match.group(1)) if match else None
 
 
-BASELINE_BEHAVIOR_TARGETS: dict[str, dict[str, Any]] = {
-    # Documented operating points used when measuring the submission as-is.
-    # Hidden variants overwrite these axes afterwards, so the baseline run is
-    # the only place where the submitted case's own calibration is observable.
-    "flow_rate_targeting": {"inlet_velocity": 1.0},
-    "transient_setup_repair": {"write_interval": 20},
-}
+def relaxation_factors(case_dir: Path) -> dict[str, float]:
+    block = block_span(read_text(case_dir / "system" / "fvSolution"), "relaxationFactors")
+    body = block[2] if block else ""
+    return {key: float(value) for key, value in re.findall(r"\b(p|U)\s+([-+0-9.eE]+);", body)}
+
+
+def control_dict_value(case_dir: Path, key: str) -> float | None:
+    match = re.search(r"\b" + re.escape(key) + r"\s+([-+0-9.eE]+)\s*;", read_text(case_dir / "system" / "controlDict"))
+    return float(match.group(1)) if match else None
+
+
+def ddt_scheme(case_dir: Path) -> str | None:
+    block = block_span(read_text(case_dir / "system" / "fvSchemes"), "ddtSchemes")
+    if block is None:
+        return None
+    match = re.search(r"\bdefault\s+([A-Za-z0-9]+)", block[2])
+    return match.group(1) if match else None
+
+
+def pimple_settings(case_dir: Path) -> dict[str, float]:
+    block = block_span(read_text(case_dir / "system" / "fvSolution"), "PIMPLE")
+    body = block[2] if block else ""
+    return {
+        key: float(value)
+        for key, value in re.findall(r"\b(nOuterCorrectors|nCorrectors|nNonOrthogonalCorrectors)\s+([-+0-9.eE]+);", body)
+    }
+
+
+def courant_max(log: str) -> float | None:
+    values = [
+        float(v)
+        for v in re.findall(r"Courant Number mean[:=\s]+[-+0-9.eE]+\s+max[:=\s]+([-+0-9.eE]+)", log)
+    ]
+    return max(values) if values else None
+
+
+def checkmesh_cell_count(log: str) -> int | None:
+    """Cell count of the generated mesh as reported by checkMesh."""
+    values = [int(v) for v in re.findall(r"\bcells:\s+(\d+)", log)]
+    return values[-1] if values else None
+
+
+def checkmesh_max_nonortho(log: str) -> float | None:
+    values = [float(v) for v in re.findall(r"non-orthogonality Max:\s*([-+0-9.eE]+)", log)]
+    return max(values) if values else None
+
+
+def checkmesh_max_skewness(log: str) -> float | None:
+    values = [float(v) for v in re.findall(r"[Mm]ax skewness = ([-+0-9.eE]+)", log)]
+    return max(values) if values else None
+
+
+def snappy_settings(case_dir: Path) -> dict[str, Any]:
+    """Pinned snappyHexMesh controls parsed from the case dictionary."""
+    text = read_text(case_dir / "system" / "snappyHexMeshDict")
+    settings: dict[str, Any] = {}
+    level = re.search(r"\blevel\s+\(\s*(\d+)\s+(\d+)\s*\)", text)
+    if level:
+        settings["refinement_level"] = max(int(level.group(1)), int(level.group(2)))
+    location = re.search(r"\blocationInMesh\s+\(([^)]*)\)", text)
+    if location:
+        settings["location"] = [float(v) for v in location.group(1).split()]
+    box_min = re.search(r"\bmin\s+\(([^)]*)\)", text)
+    box_max = re.search(r"\bmax\s+\(([^)]*)\)", text)
+    if box_min and box_max:
+        settings["obstacle_box"] = (
+            [float(v) for v in box_min.group(1).split()],
+            [float(v) for v in box_max.group(1).split()],
+        )
+    return settings
+
+
+def residual_controls(case_dir: Path) -> dict[str, float]:
+    block = block_span(read_text(case_dir / "system" / "fvSolution"), "residualControl")
+    body = block[2] if block else ""
+    return {key: float(value) for key, value in re.findall(r"\b(p|U)\s+([-+0-9.eE]+);", body)}
+
+
+def field_dimensions(case_dir: Path, field: str) -> list[float] | None:
+    match = re.search(r"\bdimensions\s+\[([^\]]+)\]\s*;", read_text(case_dir / "0" / field))
+    return [float(token) for token in match.group(1).split()] if match else None
+
+
+def probe_point(case_dir: Path) -> list[float] | None:
+    match = re.search(r"\bprobeLocations\s*\(\(([^)]+)\)\);", read_text(case_dir / "system" / "controlDict"))
+    return [float(token) for token in match.group(1).split()] if match else None
+
+
+def mesh_bounding_box(case_dir: Path) -> tuple[list[float], list[float]] | None:
+    mesh = read_text(case_dir / "system" / "blockMeshDict")
+    vertices_match = re.search(r"vertices\s*\((.*?)\);\s*blocks", mesh, re.S)
+    if not vertices_match:
+        return None
+    coords = re.findall(r"\(([-+0-9.eE]+)\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)\)", vertices_match.group(1))
+    if not coords:
+        return None
+    points = [(float(x), float(y), float(z)) for x, y, z in coords]
+    lows = [min(point[axis] for point in points) for axis in range(3)]
+    highs = [max(point[axis] for point in points) for axis in range(3)]
+    return lows, highs
+
+
+def baseline_behavior_changes(family: str, expected: dict[str, Any]) -> dict[str, Any]:
+    """Operating-point targets used when measuring the submission as-is.
+
+    Hidden variants overwrite these axes afterwards, so the baseline run is
+    the only place where the submitted case's own calibration is observable.
+    Goal-seeking targets come from the task's expected metrics.
+    """
+    changes: dict[str, Any] = {}
+    if family == "flow_rate_targeting":
+        changes["inlet_velocity"] = float(expected.get("target_inlet_velocity") or 1.0)
+    elif family == "transient_setup_repair":
+        changes["write_interval"] = 20
+    return changes
 
 
 def family_repair_ok(
@@ -585,7 +775,7 @@ def family_repair_ok(
     to fall inside the ExpectedMetrics tolerance bands.
     """
     runner = runner if runner is not None else select_runner()
-    variant = {"name": "baseline_behavior", "changes": dict(BASELINE_BEHAVIOR_TARGETS.get(family, {}))}
+    variant = {"name": "baseline_behavior", "changes": baseline_behavior_changes(family, expected)}
     tmp = Path(tempfile.mkdtemp(prefix="synthetic-openfoam-baseline-"))
     try:
         baseline_case = tmp / "case"
@@ -722,9 +912,56 @@ def patch_field_value(case_dir: Path, field: str, patch: str) -> float | None:
     return None
 
 
+def turbulence_patch(case_dir: Path, field: str, patch: str) -> dict[str, str]:
+    """Boundary entries for a turbulence field, preferring the submitted 0/ state."""
+    initial = case_dir / "0" / field
+    if initial.exists():
+        entries = patch_entries(initial, patch)
+        if entries:
+            return entries
+    latest = latest_time_dir(case_dir)
+    if latest is not None and (latest / field).exists():
+        return patch_entries(latest / field, patch)
+    return {}
+
+
+def first_numeric(text: str) -> float | None:
+    values = numeric_values(text)
+    return values[0] if values else None
+
+
+def patch_field_mean(case_dir: Path, field: str, patch: str) -> float | None:
+    """Mean of a patch's solved values, preferring the latest written state.
+
+    Unlike `patch_field_value`, this handles nonuniform value lists (the
+    leading list-size token is excluded), which written outflow patches such
+    as inletOutlet carry after the solve.
+    """
+    paths: list[Path] = []
+    latest = latest_time_dir(case_dir)
+    if latest is not None:
+        paths.append(latest / field)
+    paths.append(case_dir / "0" / field)
+    for path in paths:
+        if not path.exists():
+            continue
+        raw = patch_entries(path, patch).get("value", "")
+        if not raw:
+            continue
+        inner = re.search(r"\((.*)\)", raw, flags=re.S)
+        values = numeric_values(inner.group(1)) if inner else numeric_values(raw)
+        if values:
+            return sum(values) / len(values)
+    return None
+
+
+def outlet_datum_target(expected: dict[str, Any]) -> float:
+    return float(expected.get("outlet_pressure_target") or 0.0)
+
+
 def outlet_datum_band(expected: dict[str, Any]) -> float:
-    # The outlet gauge pressure must sit near the documented zero datum; scale
-    # the allowed band off the calibrated pressure-drop ceiling.
+    # The outlet gauge pressure must sit near the documented datum; scale the
+    # allowed band off the calibrated pressure-drop ceiling.
     return max(float(expected.get("tolerance") or 0.05) * max(float(expected.get("pressure_drop_max") or 5.0), 1.0), 0.05)
 
 
@@ -767,6 +1004,52 @@ def post_last_values(case_dir: Path, name: str) -> list[float]:
         return []
     # Exclude the first column, which is normally time.
     return rows[-1][1:] if len(rows[-1]) > 1 else rows[-1]
+
+
+def post_field_window_means(case_dir: Path, name: str, time_start: float = 0.0) -> dict[str, float]:
+    """Per-field time-averaged post-processing signals over a fixed window.
+
+    Rows from every matching table (e.g. probes/0/p, probes/0/U) whose time
+    column falls inside [time_start, end] are averaged across all value
+    columns, keyed by the file stem. Never returns instantaneous snapshots,
+    so single-core reruns reproduce the same numbers.
+    """
+    samples: dict[str, list[float]] = {}
+    for path in post_files(case_dir, name):
+        for row in table_rows(path):
+            if len(row) < 2 or row[0] < time_start:
+                continue
+            samples.setdefault(path.stem, []).extend(row[1:])
+    return {stem: sum(values) / len(values) for stem, values in samples.items() if values}
+
+
+def mean_force_coefficients(case_dir: Path, time_start: float = 0.0) -> dict[str, float]:
+    """Time-averaged Cd/Cl over the [time_start, end] window."""
+    for path in post_files(case_dir, "force"):
+        rows = [row for row in table_rows(path) if row and row[0] >= time_start]
+        if not rows:
+            continue
+        header = ""
+        for line in read_text(path).splitlines():
+            if line.strip().startswith("#"):
+                header = line.strip("# \n")
+        tokens = header.split()
+        columns: dict[str, int] = {}
+        for coeff in ("Cd", "Cl"):
+            if coeff in tokens:
+                columns[coeff] = tokens.index(coeff)
+        if "Cd" not in columns and all(len(row) >= 3 for row in rows):
+            columns["Cd"] = 2
+        if "Cl" not in columns and all(len(row) >= 4 for row in rows):
+            columns["Cl"] = 3
+        result: dict[str, float] = {}
+        for coeff, position in columns.items():
+            values = [row[position] for row in rows if position < len(row)]
+            if values:
+                result[coeff] = sum(values) / len(values)
+        if result:
+            return result
+    return {}
 
 
 def post_pressure_drop(case_dir: Path) -> float | None:
@@ -956,11 +1239,16 @@ def physical_metrics_ok(case_dir: Path, expected: dict[str, Any], family: str, l
     if family == "boundary_condition_repair":
         datum = patch_field_value(case_dir, "p", "outlet")
         metrics["outlet_pressure"] = datum if datum is not None else -1.0
-        checks.append(datum is not None and abs(datum) <= outlet_datum_band(expected))
+        checks.append(datum is not None and abs(datum - outlet_datum_target(expected)) <= outlet_datum_band(expected))
     elif family == "flow_rate_targeting":
         velocity = inlet_velocity(case_dir)
         area = inlet_patch_area(case_dir)
-        target_velocity = float(variant.get("changes", {}).get("inlet_velocity", velocity if velocity is not None else 1.0))
+        target_velocity = variant.get("changes", {}).get("inlet_velocity")
+        if target_velocity is None:
+            target_velocity = expected.get("target_inlet_velocity")
+        if target_velocity is None:
+            target_velocity = velocity if velocity is not None else 1.0
+        target_velocity = float(target_velocity)
         flow = velocity * area if velocity is not None else None
         target_flow = target_velocity * area
         tol = max(float(expected.get("tolerance") or 0.05), 0.05) * max(abs(target_flow), 1e-9)
@@ -971,22 +1259,51 @@ def physical_metrics_ok(case_dir: Path, expected: dict[str, Any], family: str, l
         datum = patch_field_value(case_dir, "p", "outlet")
         metrics["pressure_drop"] = pressure_drop if pressure_drop is not None else -1.0
         metrics["outlet_pressure"] = datum if datum is not None else -1.0
+        metrics["outlet_pressure_target"] = outlet_datum_target(expected)
         checks.append(
             pressure_drop is not None
             and float(expected.get("pressure_drop_min") or 0.0) <= pressure_drop <= float(expected.get("pressure_drop_max") or 1e9)
         )
-        checks.append(datum is not None and abs(datum) <= outlet_datum_band(expected))
+        checks.append(datum is not None and abs(datum - outlet_datum_target(expected)) <= outlet_datum_band(expected))
     elif family == "transient_setup_repair":
+        # Grade the transient integration setup plus TIME-AVERAGED quantities
+        # over the fixed window; instantaneous snapshots are never compared.
+        window = float(expected.get("average_window_start") or 0.0)
+        end_time = float(expected.get("end_time") or 100.0)
+        scheme = ddt_scheme(case_dir)
+        dt = control_dict_value(case_dir, "deltaT")
+        pimple = pimple_settings(case_dir)
+        courant = courant_max(log)
         times = positive_time_dirs(case_dir)
-        end_time = float(expected.get("end_time") or 100)
-        interval = float(variant.get("changes", {}).get("write_interval") or 20)
-        expected_writes = max(int(end_time // max(interval, 1e-9)), 1)
+        coeffs = mean_force_coefficients(case_dir, window)
+        probe_means = post_field_window_means(case_dir, "probes", window)
+        latest = latest_time_dir(case_dir)
+        field_average_ok = latest is not None and (latest / "UMean").exists()
         metrics.update({
-            "write_count": float(len(times)),
-            "expected_write_count": float(expected_writes),
+            "ddt_backward": 1.0 if scheme == "backward" else -1.0,
+            "delta_t": dt if dt is not None else -1.0,
+            "pimple_outer_correctors": pimple.get("nOuterCorrectors", -1.0),
+            "pimple_correctors": pimple.get("nCorrectors", -1.0),
+            "courant_max": courant if courant is not None else -1.0,
             "latest_write_time": times[-1] if times else -1.0,
+            "mean_force_Cd": coeffs.get("Cd", -1.0),
+            "mean_force_Cl_mag": abs(coeffs["Cl"]) if "Cl" in coeffs else -1.0,
+            "mean_probe_p_mag": abs(probe_means["p"]) if "p" in probe_means else -1.0,
+            "mean_probe_U_mag": abs(probe_means["U"]) if "U" in probe_means else -1.0,
+            "field_average_written": 1.0 if field_average_ok else -1.0,
         })
-        checks.append(len(times) >= expected_writes)
+        checks.append(scheme == "backward")
+        max_dt = expected.get("max_delta_t")
+        checks.append(dt is not None and (max_dt is None or dt <= float(max_dt) + 1e-12))
+        checks.append(bool(pimple) and pimple.get("nOuterCorrectors", 0) >= 1 and pimple.get("nCorrectors", 0) >= 1)
+        max_co = expected.get("max_courant")
+        checks.append(courant is None or max_co is None or courant <= float(max_co))
+        # Writes may not land exactly on endTime for every hidden write
+        # cadence; require the run to reach the horizon within one interval.
+        checks.append(bool(times) and times[-1] >= end_time - 0.6)
+        checks.append("Cd" in coeffs and "Cl" in coeffs)
+        checks.append("p" in probe_means and "U" in probe_means)
+        checks.append(field_average_ok)
     elif family == "source_term_calibration":
         value = source_strength(case_dir)
         response = field_average_value(case_dir, "U")
@@ -1003,26 +1320,171 @@ def physical_metrics_ok(case_dir: Path, expected: dict[str, Any], family: str, l
         metrics.update({"force_Cd": coeffs.get("Cd", -1.0), "force_Cl": coeffs.get("Cl", -1.0)})
         checks.append("Cd" in coeffs and "Cl" in coeffs)
     elif family == "scalar_transport_repair":
-        values = latest_field_values(case_dir, "T")
-        avg = field_average_value(case_dir, "T")
-        wall = patch_field_value(case_dir, "T", "movingWall")
+        # T is actively solved by the scalarTransport functionObject during
+        # the run; grade transported outcomes from the solved field: outlet
+        # mean temperature, energy-balance wall heat flux, and boundedness.
+        field = str(expected.get("scalar_field") or "T")
+        ambient = float(expected.get("scalar_ambient_value") or 300.0)
+        hot = float(expected.get("scalar_hot_value") or 310.0)
+        hot_patch = str(expected.get("scalar_hot_patch") or "movingWall")
+        values = latest_field_values(case_dir, field)
+        avg = field_average_value(case_dir, field)
+        wall = patch_field_mean(case_dir, field, hot_patch)
+        outlet_mean = patch_field_mean(case_dir, field, "outlet")
         scalar_min = min(values) if values else avg
         scalar_max = max(values) if values else avg
+        latest = latest_time_dir(case_dir)
+        # A transported solution is nonuniform at the solved time; the static
+        # initial field stays uniform.
+        transported = latest is not None and "nonuniform" in read_text(latest / field)
+        heat_flux = None
+        if outlet_mean is not None:
+            velocity = inlet_velocity(case_dir)
+            if velocity is not None:
+                # Steady energy balance: wall heat input equals the convected
+                # outflow, flow_rate * (T_out - T_in) (per rho*cp).
+                heat_flux = velocity * inlet_patch_area(case_dir) * (outlet_mean - ambient)
         metrics.update({
             "scalar_average": avg if avg is not None else -1.0,
             "scalar_min": scalar_min if scalar_min is not None else -1.0,
             "scalar_max": scalar_max if scalar_max is not None else -1.0,
             "wall_scalar": wall if wall is not None else -1.0,
+            "scalar_outlet_mean": outlet_mean if outlet_mean is not None else -1.0,
+            "scalar_wall_heat_flux": heat_flux if heat_flux is not None else -1.0,
+            "scalar_transported": 1.0 if transported else -1.0,
         })
-        checks.append(scalar_min is not None and scalar_max is not None and 250 <= scalar_min <= scalar_max <= 400)
-        # The heated wall must hold a measurably elevated temperature
-        # (seed cases initialize the field at the 300 K ambient).
-        checks.append(wall is not None and wall >= 305.0)
+        checks.append(transported)
+        # Boundedness within the tolerance band around the boundary states.
+        checks.append(
+            scalar_min is not None
+            and scalar_max is not None
+            and ambient - 1.0 <= scalar_min <= scalar_max <= hot + 1.0
+        )
+        # The heated wall must hold a measurably elevated temperature.
+        checks.append(wall is not None and wall >= ambient + 0.5 * (hot - ambient))
+        checks.append(avg is not None and avg > ambient + 0.1)
+        if outlet_mean is not None:
+            # Channel seeds: the transported outlet mean must show real wall
+            # heat input (positive flux) while staying below the wall value.
+            checks.append(ambient + 0.2 <= outlet_mean <= hot + 1.0)
+            checks.append(heat_flux is None or heat_flux > 0.0)
     elif family in {"mesh_resolution_tradeoff", "mesh_quality_repair"}:
         cells = block_mesh_cells(case_dir)
         grading = mesh_grading(case_dir)
         checks.append(cells is not None and cells <= int(expected.get("max_cells", 1000)))
         checks.append(grading is not None and grading <= 2.0)
+    elif family == "relaxation_factor_repair":
+        factors = relaxation_factors(case_dir)
+        metrics.update({"relaxation_p": factors.get("p", -1.0), "relaxation_U": factors.get("U", -1.0)})
+        # A stable steady SIMPLE strategy: heavy pressure under-relaxation,
+        # bounded momentum relaxation; the residual checks above enforce the
+        # measured convergence behavior.
+        checks.append(0.0 < factors.get("p", -1.0) <= 0.5)
+        checks.append(0.0 < factors.get("U", -1.0) <= 0.9)
+    elif family == "wall_patch_type_repair":
+        walls = patch_entries(case_dir / "0" / "U", "walls")
+        wall_type = walls.get("type", "")
+        viscous_wall = wall_type == "noSlip" or (wall_type == "fixedValue" and "(0 0 0)" in walls.get("value", ""))
+        metrics["viscous_wall"] = 1.0 if viscous_wall else -1.0
+        checks.append(viscous_wall)
+    elif family == "field_dimensions_repair":
+        dims = field_dimensions(case_dir, "p")
+        metrics["pressure_dimensions_ok"] = 1.0 if dims == [0, 2, -2, 0, 0, 0, 0] else -1.0
+        # Kinematic pressure for incompressible solvers: [0 2 -2 0 0 0 0].
+        checks.append(dims == [0, 2, -2, 0, 0, 0, 0])
+    elif family == "residual_control_repair":
+        controls = residual_controls(case_dir)
+        metrics.update({"residual_control_p": controls.get("p", -1.0), "residual_control_U": controls.get("U", -1.0)})
+        # Convergence controls must be strict; the residual window above
+        # verifies the run actually converged to that level.
+        checks.append(bool(controls) and all(0.0 < value <= 1e-3 for value in controls.values()))
+    elif family == "probe_placement_repair":
+        probe = probe_point(case_dir)
+        bounds = mesh_bounding_box(case_dir)
+        inside = False
+        if probe is not None and bounds is not None:
+            lows, highs = bounds
+            inside = all(lows[axis] <= probe[axis] <= highs[axis] for axis in range(3))
+        metrics["probe_inside_domain"] = 1.0 if inside else -1.0
+        checks.append(inside)
+        checks.append(post_output_present(case_dir, "probes") or bool(functions_present(case_dir, ["probes"])["probes"]))
+    elif family == "turbulence_bc_repair":
+        model = str(expected.get("turbulence_model") or "kOmegaSST")
+        second = "epsilon" if "epsilon" in model.lower() else "omega"
+        wall_types = {"k": "kqRWallFunction", "omega": "omegaWallFunction", "epsilon": "epsilonWallFunction"}
+        k_wall = turbulence_patch(case_dir, "k", "walls").get("type", "")
+        second_wall = turbulence_patch(case_dir, second, "walls").get("type", "")
+        wall_ok = k_wall == wall_types["k"] and second_wall == wall_types[second]
+        inlet_k = first_numeric(turbulence_patch(case_dir, "k", "inlet").get("value", ""))
+        inlet_second = first_numeric(turbulence_patch(case_dir, second, "inlet").get("value", ""))
+        k_values = latest_field_values(case_dir, "k")
+        k_mean = sum(k_values) / len(k_values) if k_values else None
+        metrics.update({
+            "turbulence_wall_functions": 1.0 if wall_ok else -1.0,
+            "turbulence_inlet_k": inlet_k if inlet_k is not None else -1.0,
+            f"turbulence_inlet_{second}": inlet_second if inlet_second is not None else -1.0,
+            "turbulence_k_mean": k_mean if k_mean is not None else -1.0,
+        })
+        checks.append(wall_ok)
+        # Freestream values must sit inside the tolerance band around the
+        # Reynolds-derived inlet state held in the private expected metrics.
+        target_k = expected.get("turbulence_inlet_k")
+        if target_k:
+            checks.append(inlet_k is not None and abs(inlet_k - float(target_k)) <= 0.10 * abs(float(target_k)))
+        target_second = expected.get(f"turbulence_inlet_{second}")
+        if target_second:
+            checks.append(inlet_second is not None and abs(inlet_second - float(target_second)) <= 0.10 * abs(float(target_second)))
+        checks.append(bool(k_values) and min(k_values) >= 0.0)
+    elif family == "snappy_hex_repair":
+        # Grade the GENERATED mesh through checkMesh quality bands plus
+        # integrated quantities (obstacle forces, inlet flux); never per-cell
+        # field comparisons.
+        snappy = snappy_settings(case_dir)
+        cells = checkmesh_cell_count(log)
+        nonortho = checkmesh_max_nonortho(log)
+        skewness = checkmesh_max_skewness(log)
+        coeffs = force_coefficients(case_dir)
+        velocity = inlet_velocity(case_dir)
+        flow = velocity * inlet_patch_area(case_dir) if velocity is not None else None
+        level = snappy.get("refinement_level")
+        location = snappy.get("location")
+        box = snappy.get("obstacle_box")
+        location_in_flow = (
+            location is not None
+            and box is not None
+            and len(location) == 3
+            and not all(box[0][axis] <= location[axis] <= box[1][axis] for axis in range(3))
+        )
+        metrics.update({
+            "mesh_cells_actual": float(cells) if cells is not None else -1.0,
+            "mesh_nonortho_max": nonortho if nonortho is not None else -1.0,
+            "mesh_skewness_max": skewness if skewness is not None else -1.0,
+            "snappy_refinement_level": float(level) if level is not None else -1.0,
+            "snappy_location_in_flow": 1.0 if location_in_flow else -1.0,
+            "force_Cd": coeffs.get("Cd", -1.0),
+            "force_Cl": coeffs.get("Cl", -1.0),
+            "flow_rate": flow if flow is not None else -1.0,
+        })
+        # Pinned snappy controls: a sane refinement budget and a keep-point
+        # in the flow region (outside the obstacle geometry).
+        checks.append(level is not None and level <= 2)
+        checks.append(location_in_flow)
+        # checkMesh quality bands on the generated (snapped) mesh.
+        cells_min = expected.get("mesh_cells_min")
+        cells_max = expected.get("mesh_cells_max")
+        checks.append(
+            cells is not None
+            and (cells_min is None or cells >= int(cells_min))
+            and (cells_max is None or cells <= int(cells_max))
+        )
+        nonortho_limit = expected.get("max_nonortho")
+        checks.append(nonortho is None or nonortho_limit is None or nonortho <= float(nonortho_limit))
+        skewness_limit = expected.get("max_skewness")
+        checks.append(skewness is None or skewness_limit is None or skewness <= float(skewness_limit))
+        # Integrated quantities on the carved obstacle must exist; anchors
+        # compare their values per hidden variant.
+        checks.append("Cd" in coeffs and "Cl" in coeffs)
+        checks.append(flow is not None and flow > 0.0)
 
     anchor_ok, anchor_detail = anchor_metrics_ok(metrics, expected.get("metric_anchor") or {})
     metrics["anchor_comparison"] = anchor_detail
@@ -1057,19 +1519,32 @@ class RealOpenFoamRunner:
         if not ok:
             return RunnerResult(False, False, False, False, False, "nan" not in log.lower(), {}, "blockMesh failed", logs, {"missing": []})
 
+        if (case_dir / "system" / "snappyHexMeshDict").exists():
+            ok, log, _ = self._run_command(
+                "snappyHexMesh", f"{env_snippet} && snappyHexMesh -overwrite -case {case_dir}", timeout
+            )
+            logs["snappyHexMesh"] = log
+            if not ok:
+                return RunnerResult(False, False, False, False, False, "nan" not in log.lower(), {}, "snappyHexMesh failed", logs, {"missing": []})
+
         ok, log, _ = self._run_command("checkMesh", f"{env_snippet} && checkMesh -case {case_dir}", timeout)
         logs["checkMesh"] = log
         mesh_ok = ok and "failed" not in log.lower()
         if not mesh_ok:
             return RunnerResult(False, False, False, False, False, "nan" not in log.lower(), {}, "checkMesh failed", logs, {"missing": []})
 
+        # Time-averaged and transported-scalar grading need function objects
+        # (probes/forces/fieldAverage/scalarTransport) running during the
+        # solve; other steady cases keep the stripped-solve behavior.
+        keep_functions = bool(expected.get("average_window_start") or expected.get("scalar_field"))
         control = case_dir / "system" / "controlDict"
         original_control = read_text(control)
-        strip_function_objects_for_solver(case_dir)
+        if not keep_functions:
+            strip_function_objects_for_solver(case_dir)
         ok, log, _ = self._run_command(solver, f"{env_snippet} && {solver} -case {case_dir}", timeout)
         logs[solver] = log
         solver_ok = ok and solver_completed(case_dir, log, expected)
-        if original_control:
+        if original_control and not keep_functions:
             control.write_text(original_control)
         if not solver_ok:
             return RunnerResult(False, mesh_ok, False, False, False, "nan" not in log.lower(), {}, "solver did not reach expected end time", logs, {"missing": missing_post_outputs(case_dir, family, expected, log)})
@@ -1138,7 +1613,10 @@ def compute_score(workspace: Path, trajectory: list[dict[str, Any]] | None, priv
     criteria: list[dict[str, Any]] = []
     metadata: dict[str, Any] = {"runner": "real-openfoam"}
 
-    hidden_variants = load_json(private / "hidden_variants.json", []) or []
+    hidden_payload = load_json(private / "hidden_variants.json", []) or []
+    # Per-task derived grids ship as {"axes", "derived_grid", "variants"};
+    # legacy payloads are a bare variant list.
+    hidden_variants = hidden_payload.get("variants") or [] if isinstance(hidden_payload, dict) else hidden_payload
     expected = load_json(private / "expected_metrics.json", {}) or {}
     metric_anchors = load_json(private / "metric_anchors.json", {}) or {}
     forbidden = load_json(private / "forbidden_edits.json", []) or []

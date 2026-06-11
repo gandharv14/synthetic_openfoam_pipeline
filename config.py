@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Any
 
 
+DIFFICULTY_LEVELS = ("easy", "medium", "hard")
+
 DEFAULT_FAMILIES = [
     "boundary_condition_repair",
     "postprocessing_instrumentation",
@@ -18,6 +20,13 @@ DEFAULT_FAMILIES = [
     "force_coeff_instrumentation",
     "scalar_transport_repair",
     "mesh_resolution_tradeoff",
+    "relaxation_factor_repair",
+    "wall_patch_type_repair",
+    "field_dimensions_repair",
+    "residual_control_repair",
+    "probe_placement_repair",
+    "turbulence_bc_repair",
+    "snappy_hex_repair",
 ]
 
 
@@ -32,6 +41,8 @@ class PipelineConfig:
     mirror_problems_root_override: Path | None = None
     use_template_problems: bool = True
     families: list[str] = field(default_factory=lambda: list(DEFAULT_FAMILIES))
+    # Number of corruptions per task: easy=1, medium=2, hard=3.
+    difficulty: str = "easy"
     naive_threshold: float = 0.45
     oracle_threshold: float = 0.999
     # Docker-based real-anchor precompute during export. Can be overridden via
@@ -45,6 +56,10 @@ class PipelineConfig:
     skip_harness_ground_truth: bool = False
     prompt_rewrite_enabled: bool = False
     prompt_rewrite_model: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.difficulty not in DIFFICULTY_LEVELS:
+            raise ValueError(f"difficulty must be one of {DIFFICULTY_LEVELS}, got {self.difficulty!r}")
 
     @property
     def problems_root(self) -> Path:

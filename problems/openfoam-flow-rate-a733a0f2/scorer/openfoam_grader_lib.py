@@ -209,13 +209,55 @@ def mesh_grading(case_dir: Path) -> float | None:
     return float(match.group(1)) if match else None
 
 
-BASELINE_BEHAVIOR_TARGETS: dict[str, dict[str, Any]] = {
-    # Documented operating points used when measuring the submission as-is.
-    # Hidden variants overwrite these axes afterwards, so the baseline run is
-    # the only place where the submitted case's own calibration is observable.
-    "flow_rate_targeting": {"inlet_velocity": 1.0},
-    "transient_setup_repair": {"write_interval": 20},
-}
+def relaxation_factors(case_dir: Path) -> dict[str, float]:
+    block = block_span(read_text(case_dir / "system" / "fvSolution"), "relaxationFactors")
+    body = block[2] if block else ""
+    return {key: float(value) for key, value in re.findall(r"\b(p|U)\s+([-+0-9.eE]+);", body)}
+
+
+def residual_controls(case_dir: Path) -> dict[str, float]:
+    block = block_span(read_text(case_dir / "system" / "fvSolution"), "residualControl")
+    body = block[2] if block else ""
+    return {key: float(value) for key, value in re.findall(r"\b(p|U)\s+([-+0-9.eE]+);", body)}
+
+
+def field_dimensions(case_dir: Path, field: str) -> list[float] | None:
+    match = re.search(r"\bdimensions\s+\[([^\]]+)\]\s*;", read_text(case_dir / "0" / field))
+    return [float(token) for token in match.group(1).split()] if match else None
+
+
+def probe_point(case_dir: Path) -> list[float] | None:
+    match = re.search(r"\bprobeLocations\s*\(\(([^)]+)\)\);", read_text(case_dir / "system" / "controlDict"))
+    return [float(token) for token in match.group(1).split()] if match else None
+
+
+def mesh_bounding_box(case_dir: Path) -> tuple[list[float], list[float]] | None:
+    mesh = read_text(case_dir / "system" / "blockMeshDict")
+    vertices_match = re.search(r"vertices\s*\((.*?)\);\s*blocks", mesh, re.S)
+    if not vertices_match:
+        return None
+    coords = re.findall(r"\(([-+0-9.eE]+)\s+([-+0-9.eE]+)\s+([-+0-9.eE]+)\)", vertices_match.group(1))
+    if not coords:
+        return None
+    points = [(float(x), float(y), float(z)) for x, y, z in coords]
+    lows = [min(point[axis] for point in points) for axis in range(3)]
+    highs = [max(point[axis] for point in points) for axis in range(3)]
+    return lows, highs
+
+
+def baseline_behavior_changes(family: str, expected: dict[str, Any]) -> dict[str, Any]:
+    """Operating-point targets used when measuring the submission as-is.
+
+    Hidden variants overwrite these axes afterwards, so the baseline run is
+    the only place where the submitted case's own calibration is observable.
+    Goal-seeking targets come from the task's expected metrics.
+    """
+    changes: dict[str, Any] = {}
+    if family == "flow_rate_targeting":
+        changes["inlet_velocity"] = float(expected.get("target_inlet_velocity") or 1.0)
+    elif family == "transient_setup_repair":
+        changes["write_interval"] = 20
+    return changes
 
 
 def family_repair_ok(
@@ -232,7 +274,7 @@ def family_repair_ok(
     to fall inside the ExpectedMetrics tolerance bands.
     """
     runner = runner if runner is not None else select_runner()
-    variant = {"name": "baseline_behavior", "changes": dict(BASELINE_BEHAVIOR_TARGETS.get(family, {}))}
+    variant = {"name": "baseline_behavior", "changes": baseline_behavior_changes(family, expected)}
     tmp = Path(tempfile.mkdtemp(prefix="synthetic-openfoam-baseline-"))
     try:
         baseline_case = tmp / "case"
@@ -369,9 +411,13 @@ def patch_field_value(case_dir: Path, field: str, patch: str) -> float | None:
     return None
 
 
+def outlet_datum_target(expected: dict[str, Any]) -> float:
+    return float(expected.get("outlet_pressure_target") or 0.0)
+
+
 def outlet_datum_band(expected: dict[str, Any]) -> float:
-    # The outlet gauge pressure must sit near the documented zero datum; scale
-    # the allowed band off the calibrated pressure-drop ceiling.
+    # The outlet gauge pressure must sit near the documented datum; scale the
+    # allowed band off the calibrated pressure-drop ceiling.
     return max(float(expected.get("tolerance") or 0.05) * max(float(expected.get("pressure_drop_max") or 5.0), 1.0), 0.05)
 
 
@@ -603,11 +649,16 @@ def physical_metrics_ok(case_dir: Path, expected: dict[str, Any], family: str, l
     if family == "boundary_condition_repair":
         datum = patch_field_value(case_dir, "p", "outlet")
         metrics["outlet_pressure"] = datum if datum is not None else -1.0
-        checks.append(datum is not None and abs(datum) <= outlet_datum_band(expected))
+        checks.append(datum is not None and abs(datum - outlet_datum_target(expected)) <= outlet_datum_band(expected))
     elif family == "flow_rate_targeting":
         velocity = inlet_velocity(case_dir)
         area = inlet_patch_area(case_dir)
-        target_velocity = float(variant.get("changes", {}).get("inlet_velocity", velocity if velocity is not None else 1.0))
+        target_velocity = variant.get("changes", {}).get("inlet_velocity")
+        if target_velocity is None:
+            target_velocity = expected.get("target_inlet_velocity")
+        if target_velocity is None:
+            target_velocity = velocity if velocity is not None else 1.0
+        target_velocity = float(target_velocity)
         flow = velocity * area if velocity is not None else None
         target_flow = target_velocity * area
         tol = max(float(expected.get("tolerance") or 0.05), 0.05) * max(abs(target_flow), 1e-9)
@@ -618,11 +669,12 @@ def physical_metrics_ok(case_dir: Path, expected: dict[str, Any], family: str, l
         datum = patch_field_value(case_dir, "p", "outlet")
         metrics["pressure_drop"] = pressure_drop if pressure_drop is not None else -1.0
         metrics["outlet_pressure"] = datum if datum is not None else -1.0
+        metrics["outlet_pressure_target"] = outlet_datum_target(expected)
         checks.append(
             pressure_drop is not None
             and float(expected.get("pressure_drop_min") or 0.0) <= pressure_drop <= float(expected.get("pressure_drop_max") or 1e9)
         )
-        checks.append(datum is not None and abs(datum) <= outlet_datum_band(expected))
+        checks.append(datum is not None and abs(datum - outlet_datum_target(expected)) <= outlet_datum_band(expected))
     elif family == "transient_setup_repair":
         times = positive_time_dirs(case_dir)
         end_time = float(expected.get("end_time") or 100)
@@ -670,6 +722,41 @@ def physical_metrics_ok(case_dir: Path, expected: dict[str, Any], family: str, l
         grading = mesh_grading(case_dir)
         checks.append(cells is not None and cells <= int(expected.get("max_cells", 1000)))
         checks.append(grading is not None and grading <= 2.0)
+    elif family == "relaxation_factor_repair":
+        factors = relaxation_factors(case_dir)
+        metrics.update({"relaxation_p": factors.get("p", -1.0), "relaxation_U": factors.get("U", -1.0)})
+        # A stable steady SIMPLE strategy: heavy pressure under-relaxation,
+        # bounded momentum relaxation; the residual checks above enforce the
+        # measured convergence behavior.
+        checks.append(0.0 < factors.get("p", -1.0) <= 0.5)
+        checks.append(0.0 < factors.get("U", -1.0) <= 0.9)
+    elif family == "wall_patch_type_repair":
+        walls = patch_entries(case_dir / "0" / "U", "walls")
+        wall_type = walls.get("type", "")
+        viscous_wall = wall_type == "noSlip" or (wall_type == "fixedValue" and "(0 0 0)" in walls.get("value", ""))
+        metrics["viscous_wall"] = 1.0 if viscous_wall else -1.0
+        checks.append(viscous_wall)
+    elif family == "field_dimensions_repair":
+        dims = field_dimensions(case_dir, "p")
+        metrics["pressure_dimensions_ok"] = 1.0 if dims == [0, 2, -2, 0, 0, 0, 0] else -1.0
+        # Kinematic pressure for incompressible solvers: [0 2 -2 0 0 0 0].
+        checks.append(dims == [0, 2, -2, 0, 0, 0, 0])
+    elif family == "residual_control_repair":
+        controls = residual_controls(case_dir)
+        metrics.update({"residual_control_p": controls.get("p", -1.0), "residual_control_U": controls.get("U", -1.0)})
+        # Convergence controls must be strict; the residual window above
+        # verifies the run actually converged to that level.
+        checks.append(bool(controls) and all(0.0 < value <= 1e-3 for value in controls.values()))
+    elif family == "probe_placement_repair":
+        probe = probe_point(case_dir)
+        bounds = mesh_bounding_box(case_dir)
+        inside = False
+        if probe is not None and bounds is not None:
+            lows, highs = bounds
+            inside = all(lows[axis] <= probe[axis] <= highs[axis] for axis in range(3))
+        metrics["probe_inside_domain"] = 1.0 if inside else -1.0
+        checks.append(inside)
+        checks.append(post_output_present(case_dir, "probes") or bool(functions_present(case_dir, ["probes"])["probes"]))
 
     anchor_ok, anchor_detail = anchor_metrics_ok(metrics, expected.get("metric_anchor") or {})
     metrics["anchor_comparison"] = anchor_detail

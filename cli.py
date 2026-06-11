@@ -7,7 +7,7 @@ from pathlib import Path
 
 from synthetic_openfoam_pipeline.agents.adversarial_filter_agent import AdversarialFilterAgent
 from synthetic_openfoam_pipeline.agents.robustness_verifier_agent import RobustnessVerifierAgent
-from synthetic_openfoam_pipeline.config import DEFAULT_FAMILIES, PipelineConfig, load_config
+from synthetic_openfoam_pipeline.config import DEFAULT_FAMILIES, DIFFICULTY_LEVELS, PipelineConfig, load_config
 from synthetic_openfoam_pipeline.deployment.deploy_handful import deploy_handful, export_candidates, generate_candidates
 from synthetic_openfoam_pipeline.export.reports import ReportWriter
 from synthetic_openfoam_pipeline.rendering import ProblemRender, render_all, render_all_physical, update_report
@@ -38,6 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
     gen.add_argument("--mirror-problems-root")
     gen.add_argument("--no-mirror-problems", action="store_true")
     gen.add_argument("--families", default=",".join(DEFAULT_FAMILIES))
+    gen.add_argument("--difficulty", choices=list(DIFFICULTY_LEVELS), default="easy", help="Corruptions per task: easy=1, medium=2, hard=3")
     gen.add_argument("--seed", type=int, default=123)
     gen.add_argument("--zip", action="store_true")
     gen.add_argument("--prompt-model", help="Anthropic model for LLM prompt rewriting")
@@ -64,6 +65,7 @@ def build_parser() -> argparse.ArgumentParser:
     dep.add_argument("--mirror-problems-root")
     dep.add_argument("--no-mirror-problems", action="store_true")
     dep.add_argument("--families", default=",".join(DEFAULT_FAMILIES))
+    dep.add_argument("--difficulty", choices=list(DIFFICULTY_LEVELS), default="easy", help="Corruptions per task: easy=1, medium=2, hard=3")
     dep.add_argument("--seed", type=int, default=123)
     dep.add_argument("--target", default="claude-harness")
     dep.add_argument("--attempts", type=int, default=3)
@@ -137,6 +139,7 @@ def main(argv: list[str] | None = None) -> int:
             output_root=Path(args.output_root),
             **_problem_config(args),
             families=_families(args.families),
+            difficulty=args.difficulty,
             seed=args.seed,
             zip_tasks=args.zip,
             prompt_rewrite_model=args.prompt_model,
@@ -185,6 +188,7 @@ def main(argv: list[str] | None = None) -> int:
             output_root=Path(args.output_root),
             **_problem_config(args),
             families=_families(args.families),
+            difficulty=args.difficulty,
             seed=args.seed,
             target=args.target,
             attempts=args.attempts,

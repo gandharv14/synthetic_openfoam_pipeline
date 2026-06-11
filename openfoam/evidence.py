@@ -85,19 +85,57 @@ def static_case_audit(case_dir: Path) -> str:
     functions = _block_body(control, "functions")
     declared = ", ".join(re.findall(r"([A-Za-z_]\w*)\s*\{", functions)) if functions else ""
     lines.append(f"system/controlDict function objects: {declared or '(none declared)'}")
-    div = re.search(r"div\(phi,U\)\s+([^;]+);", _read(case_dir / "system" / "fvSchemes"))
+    probes = re.search(r"probeLocations\s*\(\([^)]*\)\);", control)
+    if probes:
+        lines.append(f"system/controlDict {probes.group(0)}")
+    solution = _read(case_dir / "system" / "fvSolution")
+    relaxation = re.search(r"relaxationFactors\s*\{[^\n]*", solution)
+    if relaxation:
+        lines.append(f"system/fvSolution {' '.join(relaxation.group(0).split())}")
+    residual_control = re.search(r"residualControl\s*\{[^}]*\}", solution)
+    if residual_control:
+        lines.append(f"system/fvSolution {' '.join(residual_control.group(0).split())}")
+    pimple = re.search(r"PIMPLE\s*\{[^}]*\}", solution)
+    if pimple:
+        lines.append(f"system/fvSolution {' '.join(pimple.group(0).split())}")
+    schemes = _read(case_dir / "system" / "fvSchemes")
+    ddt = re.search(r"ddtSchemes\s*\{[^}]*\}", schemes)
+    if ddt:
+        lines.append(f"system/fvSchemes {' '.join(ddt.group(0).split())}")
+    div = re.search(r"div\(phi,U\)\s+([^;]+);", schemes)
     if div:
         lines.append(f"system/fvSchemes div(phi,U): {div.group(1).strip()}")
     mesh = _read(case_dir / "system" / "blockMeshDict")
     for cells, grading in re.findall(r"\((\d+\s+\d+\s+\d+)\)\s+simpleGrading\s+\(([^)]+)\)", mesh):
         lines.append(f"system/blockMeshDict block: cells ({cells}) simpleGrading ({grading})")
+    snappy = _read(case_dir / "system" / "snappyHexMeshDict")
+    if snappy:
+        for key, pattern in (
+            ("refinement", r"level\s+\([^)]*\);"),
+            ("locationInMesh", r"locationInMesh\s+\([^)]*\);"),
+            ("castellation", r"castellatedMesh\s+[^;]+;"),
+        ):
+            match = re.search(pattern, snappy)
+            if match:
+                lines.append(f"system/snappyHexMeshDict {key}: {' '.join(match.group(0).split())}")
     source = re.search(r"U\s+\(\([^)]+\)\s+0\);", _read(case_dir / "constant" / "fvOptions"))
     if source:
         lines.append(f"constant/fvOptions momentum source: {source.group(0)}")
     nu = _entry(_read(case_dir / "constant" / "transportProperties"), "nu")
     if nu is not None:
         lines.append(f"constant/transportProperties nu: {nu}")
-    for field_name in ("U", "p", "T"):
+    turbulence = _read(case_dir / "constant" / "turbulenceProperties")
+    simulation_type = _entry(turbulence, "simulationType")
+    if simulation_type is not None:
+        lines.append(f"constant/turbulenceProperties simulationType: {simulation_type}")
+    ras_model = _entry(turbulence, "RASModel")
+    if ras_model is not None:
+        lines.append(f"constant/turbulenceProperties RASModel: {ras_model}")
+    for field_name in ("U", "p", "T", "k", "omega", "epsilon", "nut"):
+        field_text = _read(case_dir / "0" / field_name)
+        dims = re.search(r"dimensions\s+\[[^\]]+\];", field_text)
+        if dims:
+            lines.append(f"0/{field_name} {dims.group(0)}")
         for patch, body in _patches(case_dir / "0" / field_name):
             lines.append(f"0/{field_name} boundary '{patch}': {body}")
     return "\n".join(lines)

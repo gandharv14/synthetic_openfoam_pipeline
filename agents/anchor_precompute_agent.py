@@ -9,6 +9,7 @@ import tempfile
 from typing import Any
 
 from synthetic_openfoam_pipeline.schemas import HiddenVariant, TaskCandidate
+from synthetic_openfoam_pipeline.openfoam.case_model import case_geometry_stats
 from synthetic_openfoam_pipeline.openfoam.dictionary_edit import apply_structured_edit, replace_required
 from synthetic_openfoam_pipeline.utils.templates import GRADER_LIB
 
@@ -52,10 +53,12 @@ class AnchorPrecomputeAgent:
         source = float(changes.get("source_strength", expected.get("source_target") or candidate.seed_case.parameters.get("source_strength", 0.2)))
         grading = float(changes.get("mesh_grading", 1.5))
         write_interval = int(changes.get("write_interval", 20))
-        area = self._inlet_area(candidate.seed_case.case_kind)
+        stats = case_geometry_stats(candidate.seed_case)
+        area = stats["inlet_area"]
         flow_rate = velocity * area
         pressure_drop = self._pressure_drop_anchor(velocity, viscosity, candidate.seed_case.case_kind)
-        mesh_cells = self._mesh_cells(candidate.seed_case.case_kind)
+        outlet_pressure = float(expected.get("outlet_pressure_target") or 0.0)
+        mesh_cells = int(stats["mesh_cells"])
         scalar_average = 305.0 if "cavity" in candidate.seed_case.case_kind else 300.0
         force_cd = 0.35 + 0.05 * velocity
         force_cl = 0.02
@@ -63,6 +66,7 @@ class AnchorPrecomputeAgent:
         oracle = {
             "flow_rate": round(flow_rate, 6),
             "pressure_drop": round(pressure_drop, 6),
+            "outlet_pressure": round(outlet_pressure, 6),
             "source_strength": round(source, 6),
             "source_response": round(max(source, 0.0), 6),
             "mesh_cells": mesh_cells,
@@ -75,6 +79,7 @@ class AnchorPrecomputeAgent:
         baseline = {
             "flow_rate": round(flow_rate * 0.35, 6),
             "pressure_drop": round(pressure_drop * 1.4, 6),
+            "outlet_pressure": round(outlet_pressure + 2.0, 6),
             "source_strength": 0.0,
             "source_response": 0.0,
             "mesh_cells": max(mesh_cells * 4, mesh_cells),
@@ -87,6 +92,9 @@ class AnchorPrecomputeAgent:
         tolerances = {
             "flow_rate": 0.08,
             "pressure_drop": 0.35,
+            # Absolute band (anchor tolerances >= 1 are absolute) so the zero
+            # datum target stays checkable.
+            "outlet_pressure": 1.0,
             "source_strength": float(expected.get("tolerance") or 0.05),
             "source_response": 0.50,
             "mesh_cells": 0.0,
@@ -96,6 +104,76 @@ class AnchorPrecomputeAgent:
             "scalar_average": 0.20,
             "write_interval": 0.0,
         }
+        if expected.get("average_window_start"):
+            # Transient time-averaged anchors. Formula values are rough and
+            # carry wide absolute bands (tolerances >= 1 are absolute); the
+            # in-container precompute replaces them with measured means.
+            oracle.update({
+                "mean_force_Cd": round(force_cd, 6),
+                "mean_force_Cl_mag": 0.05,
+                "mean_probe_p_mag": 0.25,
+                "mean_probe_U_mag": round(velocity * 0.6, 6),
+            })
+            baseline.update({
+                "mean_force_Cd": round(force_cd * 1.5, 6),
+                "mean_force_Cl_mag": 0.5,
+                "mean_probe_p_mag": 1.0,
+                "mean_probe_U_mag": round(velocity * 0.2, 6),
+            })
+            tolerances.update({
+                "mean_force_Cd": 5.0,
+                "mean_force_Cl_mag": 2.0,
+                "mean_probe_p_mag": 2.0,
+                "mean_probe_U_mag": 2.0,
+            })
+        if expected.get("scalar_field"):
+            # Transported-scalar anchors. Formula values are coarse with wide
+            # absolute bands (tolerances >= 1 are absolute); the in-container
+            # precompute replaces them with measured transported outcomes per
+            # hidden variant.
+            ambient = float(expected.get("scalar_ambient_value") or 300.0)
+            hot = float(expected.get("scalar_hot_value") or 310.0)
+            oracle.update({
+                "scalar_min": round(ambient, 6),
+                "scalar_max": round(hot, 6),
+                "wall_scalar": round(hot, 6),
+                "scalar_outlet_mean": round(ambient + 1.0, 6),
+                "scalar_wall_heat_flux": 0.1,
+            })
+            baseline.update({
+                "scalar_min": round(ambient, 6),
+                "scalar_max": round(ambient, 6),
+                "wall_scalar": round(ambient, 6),
+                "scalar_outlet_mean": round(ambient, 6),
+                "scalar_wall_heat_flux": 0.0,
+            })
+            tolerances.update({
+                "scalar_min": 2.0,
+                "scalar_max": 2.0,
+                "wall_scalar": 0.05,
+                "scalar_outlet_mean": 5.0,
+                "scalar_wall_heat_flux": 2.0,
+            })
+        turbulence_model = expected.get("turbulence_model")
+        if turbulence_model:
+            second = "epsilon" if "epsilon" in str(turbulence_model).lower() else "omega"
+            k_target = float(expected.get("turbulence_inlet_k") or 0.0)
+            second_target = float(expected.get(f"turbulence_inlet_{second}") or 0.0)
+            # Inlet values are dictionary-exact (Reynolds-derived); the
+            # corrupted starter inflates k x100 and collapses the dissipation
+            # field /100, so the baseline mirrors that defect.
+            oracle["turbulence_inlet_k"] = round(k_target, 8)
+            oracle[f"turbulence_inlet_{second}"] = round(second_target, 8)
+            baseline["turbulence_inlet_k"] = round(k_target * 100, 8)
+            baseline[f"turbulence_inlet_{second}"] = round(second_target / 100, 8)
+            tolerances["turbulence_inlet_k"] = 0.10
+            tolerances[f"turbulence_inlet_{second}"] = 0.10
+        if candidate.family == "snappy_hex_repair":
+            # The 3D obstacle force scales are not predictable by the 2D
+            # heuristic above; widen to absolute bands (tolerances >= 1 are
+            # absolute) until the in-container precompute measures them.
+            tolerances["force_Cd"] = 5.0
+            tolerances["force_Cl"] = 5.0
         anchor = {
             "changes": dict(changes),
             "oracle": oracle,
@@ -164,17 +242,6 @@ print(json.dumps(run.metrics))
         except Exception:
             return None
 
-    def _inlet_area(self, case_kind: str) -> float:
-        if case_kind in {"cavity", "heated_cavity"}:
-            return 0.1
-        if case_kind == "backward_facing_step":
-            return 0.06
-        if case_kind == "diffuser_channel_expansion":
-            return 0.06
-        if case_kind == "pipe_bend":
-            return 0.04
-        return 0.1
-
     def _pressure_drop_anchor(self, velocity: float, viscosity: float, case_kind: str) -> float:
         geometry_factor = {
             "backward_facing_step": 1.35,
@@ -185,13 +252,3 @@ print(json.dumps(run.metrics))
         }.get(case_kind, 1.0)
         reynolds_scale = max(0.5, min(2.0, 0.01 / max(viscosity, 1e-9)))
         return max(0.05, min(5.0, 0.5 * velocity * velocity * geometry_factor * reynolds_scale))
-
-    def _mesh_cells(self, case_kind: str) -> int:
-        return {
-            "cavity": 100,
-            "heated_cavity": 100,
-            "backward_facing_step": 224,
-            "diffuser_channel_expansion": 224,
-            "obstacle_wake": 262,
-            "pipe_bend": 125,
-        }.get(case_kind, 200)
